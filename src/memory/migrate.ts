@@ -6,13 +6,48 @@
 import { getPool, closePool } from './postgres.js';
 import { logger } from '../utils/logger.js';
 
+const PGVECTOR_INSTALL_GUIDE = `
+pgvector extension is not installed on the PostgreSQL server.
+Install it for your platform:
+
+  macOS (Homebrew):    brew install pgvector
+  Ubuntu/Debian:       sudo apt install postgresql-XX-pgvector  (XX = PG version, e.g. 16)
+  Docker:              Use image pgvector/pgvector:pg16
+  See: https://github.com/pgvector/pgvector#installation
+`;
+
+export async function ensurePgvector(): Promise<void> {
+  logger.info('[Migrate] Ensuring pgvector extension...');
+  const pool = getPool();
+  try {
+    await pool.query('CREATE EXTENSION IF NOT EXISTS vector');
+    logger.info('[Migrate] pgvector extension ready');
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    if (
+      msg.includes('could not open') ||
+      msg.includes('is not available') ||
+      msg.includes('does not exist') ||
+      msg.includes('extension')
+    ) {
+      logger.error('[Migrate] %s', PGVECTOR_INSTALL_GUIDE);
+    }
+    throw error;
+  }
+}
+
 const MIGRATION_SQL = `
 -- Enable pgvector extension
 CREATE EXTENSION IF NOT EXISTS vector;
 
--- Tasks table
+-- Drop tables if they exist (for schema change from UUID to BIGSERIAL)
+DROP TABLE IF EXISTS jobs;
+DROP TABLE IF EXISTS messages;
+DROP TABLE IF EXISTS tasks;
+
+-- Tasks table (numeric id)
 CREATE TABLE IF NOT EXISTS tasks (
-  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id          BIGSERIAL PRIMARY KEY,
   description TEXT NOT NULL,
   status      TEXT NOT NULL DEFAULT 'pending'
                 CHECK (status IN ('pending', 'running', 'completed', 'failed')),
@@ -41,11 +76,27 @@ ON CONFLICT (name) DO NOTHING;
 -- Messages table (stores per-agent outputs per task)
 CREATE TABLE IF NOT EXISTS messages (
   id          SERIAL PRIMARY KEY,
-  task_id     UUID NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+  task_id     BIGINT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
   agent       TEXT NOT NULL,
   content     TEXT NOT NULL,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Jobs table (PostgreSQL-backed queue)
+CREATE TABLE IF NOT EXISTS jobs (
+  id          BIGSERIAL PRIMARY KEY,
+  task_id     BIGINT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+  queue_name  TEXT NOT NULL,
+  data        JSONB NOT NULL,
+  status      TEXT NOT NULL DEFAULT 'pending'
+                CHECK (status IN ('pending', 'running', 'completed', 'failed')),
+  attempts    INT NOT NULL DEFAULT 0,
+  error       TEXT,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_jobs_pending
+  ON jobs (queue_name, id) WHERE status = 'pending';
 
 -- Embeddings table (for semantic memory / vector search)
 CREATE TABLE IF NOT EXISTS embeddings (
@@ -76,15 +127,24 @@ CREATE TRIGGER tasks_updated_at
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 `;
 
-async function migrate(): Promise<void> {
+export async function runMigration(): Promise<void> {
   logger.info('[Migrate] Running database migration...');
   const pool = getPool();
   await pool.query(MIGRATION_SQL);
   logger.info('[Migrate] Migration completed successfully');
+}
+
+async function main(): Promise<void> {
+  await ensurePgvector();
+  await runMigration();
   await closePool();
 }
 
-migrate().catch((error) => {
-  logger.error('[Migrate] Migration failed', error);
-  process.exit(1);
-});
+// Only run when executed directly (npm run db:migrate), not when imported by setup.ts
+const isEntryPoint = process.argv[1]?.includes('migrate');
+if (isEntryPoint) {
+  main().catch((error) => {
+    logger.error('[Migrate] Migration failed', error);
+    process.exit(1);
+  });
+}

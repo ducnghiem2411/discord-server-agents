@@ -4,6 +4,7 @@ import {
   EmbedBuilder,
   Colors,
 } from 'discord.js';
+import { AGENT_HIERARCHY } from '../config/agents.js';
 import { TaskService } from '../services/task.service.js';
 import { logger } from '../utils/logger.js';
 
@@ -46,6 +47,7 @@ export const taskCommand: SlashCommand = {
         description,
         discordChannelId: interaction.channelId,
         discordMessageId: reply.id,
+        pipeline: [...AGENT_HIERARCHY],
       });
     } catch (error) {
       logger.error('[Commands] Failed to queue task', error);
@@ -73,9 +75,14 @@ export const statusCommand: SlashCommand = {
     ) as SlashCommandBuilder,
 
   async execute(interaction: ChatInputCommandInteraction): Promise<void> {
-    const taskId = interaction.options.getString('task_id', true);
-
     await interaction.deferReply({ ephemeral: true });
+
+    const taskIdStr = interaction.options.getString('task_id', true);
+    const taskId = parseInt(taskIdStr, 10);
+    if (isNaN(taskId)) {
+      await interaction.editReply({ content: `Invalid task ID: \`${taskIdStr}\`. Use a numeric ID.` });
+      return;
+    }
 
     try {
       const taskService = TaskService.getInstance();
@@ -97,7 +104,7 @@ export const statusCommand: SlashCommand = {
         .setTitle('Task Status')
         .setColor(task.status === 'completed' ? Colors.Green : task.status === 'failed' ? Colors.Red : Colors.Yellow)
         .addFields(
-          { name: 'Task ID', value: task.id, inline: true },
+          { name: 'Task ID', value: String(task.id), inline: true },
           { name: 'Status', value: `${statusEmoji[task.status] ?? ''} ${task.status}`, inline: true },
           { name: 'Description', value: task.description },
           { name: 'Created', value: task.createdAt.toLocaleString(), inline: true },

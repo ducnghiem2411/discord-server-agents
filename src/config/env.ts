@@ -13,14 +13,11 @@ const envSchema = z.object({
   QA_BOT_CLIENT_ID: z.string().min(1, 'QA_BOT_CLIENT_ID is required'),
   DISCORD_GUILD_ID: z.string().min(1, 'DISCORD_GUILD_ID is required'),
 
-  // Redis
-  REDIS_URL: z.string().default('redis://localhost:6379'),
-
   // PostgreSQL
   POSTGRES_URL: z.string().min(1, 'POSTGRES_URL is required'),
 
   // LLM
-  LLM_PROVIDER: z.enum(['openai', 'anthropic', 'qwen']).default('openai'),
+  LLM_PROVIDER: z.enum(['openai', 'anthropic', 'qwen', 'gemini']).default('openai'),
   OPENAI_API_KEY: z.string().optional(),
   OPENAI_MODEL: z.string().default('gpt-4o'),
   ANTHROPIC_API_KEY: z.string().optional(),
@@ -28,6 +25,8 @@ const envSchema = z.object({
   QWEN_API_KEY: z.string().optional(),
   QWEN_MODEL: z.string().default('qwen-plus'),
   QWEN_BASE_URL: z.string().default('https://dashscope.aliyuncs.com/compatible-mode/v1'),
+  GEMINI_API_KEY: z.string().optional(),
+  GEMINI_MODEL: z.string().default('gemini-2.5-flash'),
 
   // App
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),

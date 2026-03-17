@@ -3,6 +3,7 @@ import { LLMProvider } from './provider.js';
 import { OpenAIProvider } from './openai.js';
 import { AnthropicProvider } from './anthropic.js';
 import { QwenProvider } from './qwen.js';
+import { GeminiProvider } from './gemini.js';
 
 let _provider: LLMProvider | null = null;
 
@@ -18,6 +19,9 @@ export function getLLMProvider(): LLMProvider {
       break;
     case 'qwen':
       _provider = new QwenProvider();
+      break;
+    case 'gemini':
+      _provider = new GeminiProvider();
       break;
     default:
       throw new Error(`Unknown LLM provider: ${env.LLM_PROVIDER}`);

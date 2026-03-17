@@ -13,9 +13,20 @@ function shouldLog(level: LogLevel): boolean {
   return levels[level] >= levels[env.LOG_LEVEL];
 }
 
+function serialize(arg: unknown): string {
+  if (arg instanceof Error) {
+    return arg.stack ?? `${arg.name}: ${arg.message}`;
+  }
+  try {
+    return JSON.stringify(arg);
+  } catch {
+    return String(arg);
+  }
+}
+
 function format(level: LogLevel, message: string, ...args: unknown[]): string {
   const ts = new Date().toISOString();
-  const extra = args.length ? ' ' + args.map((a) => JSON.stringify(a)).join(' ') : '';
+  const extra = args.length ? ' ' + args.map(serialize).join(' ') : '';
   return `[${ts}] [${level.toUpperCase()}] ${message}${extra}`;
 }
 

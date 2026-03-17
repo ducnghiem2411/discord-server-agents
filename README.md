@@ -7,23 +7,19 @@ A Discord-based AI workspace where a human user can assign tasks to multiple AI 
 ```
 Discord User
     ↓
-/task command
+/task command or @mention
     ↓
 Discord Bot (discord.js)
     ↓
-Redis Queue (BullMQ)
+PostgreSQL (tasks, jobs, messages)
     ↓
-Worker Process
-    ↓
-LangGraph Orchestrator
+Worker Process (polling)
     ↓
 ┌─────────────┬──────────────┬──────────────┐
 │ Manager     │    Dev       │     QA       │
 │ Agent       │    Agent     │    Agent     │
 │ (Planning)  │   (Code)     │  (Review)    │
 └─────────────┴──────────────┴──────────────┘
-    ↓
-PostgreSQL (tasks, messages, embeddings)
     ↓
 Discord (results posted as embeds)
 ```
@@ -34,16 +30,15 @@ Discord (results posted as embeds)
 |----------------|-----------------------------------|
 | Bot            | discord.js v14                    |
 | Agent Framework| LangGraphJS                       |
-| Queue          | BullMQ + Redis (IORedis)          |
+| Queue          | PostgreSQL (jobs table, polling)  |
 | Database       | PostgreSQL + pgvector             |
-| LLM            | OpenAI / Anthropic / Qwen         |
+| LLM            | OpenAI / Anthropic / Qwen        |
 | Runtime        | Node.js + TypeScript              |
 
 ## Prerequisites
 
 - Node.js 18+
 - PostgreSQL 15+ with pgvector extension
-- Redis 6+
 - A Discord application and bot token
 
 ## Setup
@@ -69,20 +64,27 @@ Edit `.env` and fill in:
 | `DISCORD_TOKEN`     | Bot token from Discord Developer Portal          |
 | `DISCORD_CLIENT_ID` | Application ID from Discord Developer Portal     |
 | `DISCORD_GUILD_ID`  | Your server (guild) ID                           |
-| `REDIS_URL`         | Redis connection string                          |
 | `POSTGRES_URL`      | PostgreSQL connection string                     |
 | `LLM_PROVIDER`      | `openai`, `anthropic`, or `qwen`                 |
 | `OPENAI_API_KEY`    | OpenAI key (if using OpenAI)                     |
 | `ANTHROPIC_API_KEY` | Anthropic key (if using Anthropic)               |
 | `QWEN_API_KEY`      | Qwen/DashScope key (if using Qwen)               |
 
-### 3. Run the database migration
+### 3. Prepare the database
+
+For first-time setup or when deploying to a new environment:
+
+```bash
+npm run setup
+```
+
+This ensures the pgvector extension is enabled, runs migrations, and verifies PostgreSQL connectivity.
+
+To run only the database migration:
 
 ```bash
 npm run db:migrate
 ```
-
-This creates all tables and enables the `pgvector` extension.
 
 ### 4. Register Discord slash commands
 
@@ -107,6 +109,22 @@ npm run build
 npm start
 ```
 
+## Deploy / New environment
+
+When deploying to a new server or setting up a fresh system, run once before starting the app:
+
+```bash
+npm run setup
+```
+
+This will:
+
+- Ensure the pgvector extension is enabled (with install instructions if missing)
+- Run database migrations (create tables)
+- Verify PostgreSQL connectivity
+
+Then start the app with `npm start` or `npm run dev`.
+
 ## Slash Commands
 
 ### `/task <description>`
@@ -127,7 +145,7 @@ Each agent's output is posted as a Discord embed in the channel.
 
 ### `/status <task_id>`
 
-Check the current status of a task by its UUID.
+Check the current status of a task by its numeric ID.
 
 ## Switching LLM Providers
 
@@ -174,10 +192,10 @@ src/
 │   ├── vector.ts           # pgvector store/search helpers
 │   └── migrate.ts          # DB schema migration script
 ├── queue/
-│   ├── redis.ts            # BullMQ queue + IORedis connection
-│   └── worker.ts           # Job processor (runs LangGraph workflow)
+│   └── worker.ts           # Job processor (polls PostgreSQL jobs table)
 ├── services/
-│   ├── task.service.ts     # Task CRUD + queue dispatch
+│   ├── task.service.ts     # Task CRUD + job dispatch
+│   ├── job.service.ts      # Job queue (enqueue, claim, complete)
 │   └── agent.service.ts    # Agent workflow orchestration
 ├── types/
 │   ├── agent.ts            # Agent + AgentResult interfaces
@@ -190,7 +208,8 @@ src/
 ## Database Schema
 
 ```sql
-tasks       — id, description, status, result, error, discord_*, created_at, updated_at
+tasks       — id (BIGSERIAL), description, status, result, error, discord_*, created_at, updated_at
+jobs        — id (BIGSERIAL), task_id, queue_name, data (JSONB), status, attempts, error, created_at
 agents      — id, name, description
 messages    — id, task_id, agent, content, created_at
 embeddings  — id, content, metadata, vector (1536-dim), created_at

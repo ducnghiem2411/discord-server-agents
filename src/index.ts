@@ -2,10 +2,9 @@ import './config/env.js';
 import { env } from './config/env.js';
 import { AgentBot } from './discord/AgentBot.js';
 import { commands } from './discord/commands.js';
+import { handleMention } from './discord/mentionHandler.js';
 import { startManagerWorker, startDevWorker, startQAWorker } from './queue/worker.js';
 import { getPool, closePool } from './memory/postgres.js';
-import { closeQueues } from './queue/queues.js';
-import { TaskService } from './services/task.service.js';
 import { logger } from './utils/logger.js';
 
 async function main(): Promise<void> {
@@ -20,6 +19,9 @@ async function main(): Promise<void> {
     logger.error('[App] Failed to connect to PostgreSQL', error);
     process.exit(1);
   }
+
+  // Confirm Discord config (ensure bots are added to guild)
+  logger.info('[App] Discord config: guild=%s | Manager=%s | Dev=%s | QA=%s', env.DISCORD_GUILD_ID, env.MANAGER_BOT_CLIENT_ID, env.DEV_BOT_CLIENT_ID, env.QA_BOT_CLIENT_ID);
 
   // Create and start 3 AgentBot instances
   const managerBot = new AgentBot({
@@ -40,17 +42,21 @@ async function main(): Promise<void> {
     clientId: env.QA_BOT_CLIENT_ID,
   });
 
-  // ManagerBot: slash commands + @mention handler
+  const allBotConfigs = [
+    { clientId: env.MANAGER_BOT_CLIENT_ID, name: 'Manager' },
+    { clientId: env.DEV_BOT_CLIENT_ID, name: 'Dev' },
+    { clientId: env.QA_BOT_CLIENT_ID, name: 'QA' },
+  ];
+
+  const createMentionHandler = (postBot: AgentBot) => (message: import('discord.js').Message) =>
+    handleMention(message, allBotConfigs, (channelId, description) =>
+      postBot.postTaskReceived(channelId, description),
+    );
+
   managerBot.enableSlashCommands(commands);
-  managerBot.onMention(async (description, channelId) => {
-    const messageId = await managerBot.postTaskReceived(channelId, description);
-    const taskService = TaskService.getInstance();
-    await taskService.createAndQueueTask({
-      description,
-      discordChannelId: channelId,
-      discordMessageId: messageId,
-    });
-  });
+  managerBot.onMention(createMentionHandler(managerBot));
+  devBot.onMention(createMentionHandler(managerBot));
+  qaBot.onMention(createMentionHandler(managerBot));
 
   await Promise.all([managerBot.start(), devBot.start(), qaBot.start()]);
 
@@ -64,10 +70,11 @@ async function main(): Promise<void> {
   // Graceful shutdown
   const shutdown = async (signal: string) => {
     logger.info(`[App] Received ${signal}, shutting down...`);
-    await Promise.all([managerWorker.close(), devWorker.close(), qaWorker.close()]);
+    managerWorker.stop();
+    devWorker.stop();
+    qaWorker.stop();
     await Promise.all([managerBot.stop(), devBot.stop(), qaBot.stop()]);
     await closePool();
-    await closeQueues();
     logger.info('[App] Shutdown complete');
     process.exit(0);
   };

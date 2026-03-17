@@ -17,7 +17,7 @@ export interface AgentBotConfig {
   clientId: string;
 }
 
-export type MentionCallback = (description: string, channelId: string, messageId: string) => void | Promise<void>;
+export type MentionCallback = (message: Message) => void | Promise<void>;
 
 /**
  * Generic Discord bot for agent posting. Each instance handles one bot identity.
@@ -54,17 +54,11 @@ export class AgentBot {
       const mention = message.mentions.users.get(this.client.user!.id);
       if (!mention) return;
 
-      const description = message.content.replace(/<@\d+>\s*/, '').trim();
-      if (!description) {
-        await message.reply('Please provide a task description after the mention.');
-        return;
-      }
-
-      logger.info(`[AgentBot:${this.config.name}] Mention received: "${description}" from ${message.author.tag}`);
+      logger.info(`[AgentBot:${this.config.name}] Mention received from ${message.author.tag}`);
 
       if (this.mentionCallback) {
         try {
-          await this.mentionCallback(description, message.channelId, message.id);
+          await this.mentionCallback(message);
         } catch (error) {
           logger.error(`[AgentBot:${this.config.name}] Mention callback error`, error);
           await message.reply('An error occurred while processing your request.').catch(() => {});

@@ -1,7 +1,7 @@
 export type TaskStatus = 'pending' | 'running' | 'completed' | 'failed';
 
 export interface Task {
-  id: string;
+  id: number;
   description: string;
   status: TaskStatus;
   createdAt: Date;
@@ -12,25 +12,17 @@ export interface Task {
   error?: string;
 }
 
-export interface ManagerJobData {
-  taskId: string;
+/** Base job data for pipeline-aware routing. All queues use this shape. */
+export interface PipelineJobData {
+  taskId: number;
   description: string;
   channelId: string;
   messageId: string;
+  pipeline: string[];
+  currentIndex: number;
+  outputs: Record<string, string>;
 }
 
-export interface DevJobData extends ManagerJobData {
-  managerOutput: string;
-}
-
-export interface QAJobData extends DevJobData {
-  devOutput: string;
-}
-
-/** @deprecated Use ManagerJobData for manager-tasks queue */
-export interface TaskJobData {
-  taskId: string;
-  description: string;
-  discordChannelId: string;
-  discordMessageId: string;
-}
+export type ManagerJobData = PipelineJobData;
+export type DevJobData = PipelineJobData;
+export type QAJobData = PipelineJobData;
