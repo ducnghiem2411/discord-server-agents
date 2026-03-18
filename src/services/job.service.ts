@@ -41,6 +41,9 @@ export class JobService {
 
   async claimNext(queueName: string): Promise<JobRow | null> {
     const pool = getPool();
+    // #region agent log
+    fetch('http://127.0.0.1:7259/ingest/c10a561b-ea24-499b-b104-580905275518',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'3e870f'},body:JSON.stringify({sessionId:'3e870f',location:'job.service.ts:claimNext:before',message:'claimNext called',data:{queueName},timestamp:Date.now(),hypothesisId:'H5'})}).catch(()=>{});
+    // #endregion
     const result = await pool.query<{
       id: number;
       task_id: number;
@@ -60,6 +63,9 @@ export class JobService {
     );
     if (result.rows.length === 0) return null;
     const row = result.rows[0];
+    // #region agent log
+    fetch('http://127.0.0.1:7259/ingest/c10a561b-ea24-499b-b104-580905275518',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'3e870f'},body:JSON.stringify({sessionId:'3e870f',location:'job.service.ts:claimNext:claimed',message:'Job claimed',data:{jobId:row.id,taskId:row.task_id,queueName},timestamp:Date.now(),hypothesisId:'H5'})}).catch(()=>{});
+    // #endregion
     return {
       id: row.id,
       task_id: row.task_id,

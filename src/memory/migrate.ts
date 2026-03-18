@@ -55,9 +55,14 @@ CREATE TABLE IF NOT EXISTS tasks (
   error       TEXT,
   discord_channel_id TEXT,
   discord_message_id TEXT,
+  original_discord_message_id TEXT,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_mention_dedup
+  ON tasks (discord_channel_id, original_discord_message_id)
+  WHERE original_discord_message_id IS NOT NULL;
 
 -- Agents table (registry of known agents)
 CREATE TABLE IF NOT EXISTS agents (
@@ -70,7 +75,8 @@ CREATE TABLE IF NOT EXISTS agents (
 INSERT INTO agents (name, description) VALUES
   ('Manager', 'Analyzes tasks and creates execution plans'),
   ('Dev',     'Implements solutions and generates code'),
-  ('QA',      'Reviews implementations and suggests improvements')
+  ('QA',      'Reviews implementations and suggests improvements'),
+  ('Reporter','Reports progress and answers queries from DB')
 ON CONFLICT (name) DO NOTHING;
 
 -- Messages table (stores per-agent outputs per task)

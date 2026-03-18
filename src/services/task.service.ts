@@ -50,9 +50,36 @@ export class TaskService {
     return TaskService.instance;
   }
 
+  /** Try to create task. Returns null if duplicate (channel+originalMessageId). Caller must check before posting. */
+  async tryCreateTaskForMention(
+    description: string,
+    discordChannelId: string,
+    originalDiscordMessageId: string,
+    pipeline: string[],
+  ): Promise<Task | null> {
+    const rows = await query<TaskRow>(
+      `INSERT INTO tasks (description, status, discord_channel_id, original_discord_message_id)
+       VALUES ($1, 'pending', $2, $3)
+       ON CONFLICT (discord_channel_id, original_discord_message_id) WHERE (original_discord_message_id IS NOT NULL) DO NOTHING
+       RETURNING *`,
+      [description, discordChannelId, originalDiscordMessageId],
+    );
+    if (rows.length === 0) {
+      logger.info('[TaskService] Duplicate message skipped (channel + original_message_id)');
+      return null;
+    }
+    return rowToTask(rows[0]);
+  }
+
+  async updateTaskEmbed(taskId: number, discordMessageId: string): Promise<void> {
+    await query(`UPDATE tasks SET discord_message_id = $1 WHERE id = $2`, [discordMessageId, taskId]);
+  }
+
   async createAndQueueTask(input: CreateTaskInput): Promise<Task> {
     const pipeline = input.pipeline ?? [...AGENT_HIERARCHY];
-
+    // #region agent log
+    fetch('http://127.0.0.1:7259/ingest/c10a561b-ea24-499b-b104-580905275518',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'3e870f'},body:JSON.stringify({sessionId:'3e870f',location:'task.service.ts:createAndQueueTask',message:'createAndQueueTask called',data:{desc:input.description.slice(0,30),pipeline:pipeline.join(',')},timestamp:Date.now(),hypothesisId:'H4'})}).catch(()=>{});
+    // #endregion
     const rows = await query<TaskRow>(
       `INSERT INTO tasks (description, status, discord_channel_id, discord_message_id)
        VALUES ($1, 'pending', $2, $3)

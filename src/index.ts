@@ -1,8 +1,10 @@
 import './config/env.js';
 import { env } from './config/env.js';
+import { getReporterBotId } from './config/agents.js';
 import { AgentBot } from './discord/AgentBot.js';
 import { commands } from './discord/commands.js';
 import { handleMention } from './discord/mentionHandler.js';
+import { handleReporterMention } from './discord/reporterHandler.js';
 import { startManagerWorker, startDevWorker, startQAWorker } from './queue/worker.js';
 import { getPool, closePool } from './memory/postgres.js';
 import { logger } from './utils/logger.js';
@@ -21,9 +23,16 @@ async function main(): Promise<void> {
   }
 
   // Confirm Discord config (ensure bots are added to guild)
-  logger.info('[App] Discord config: guild=%s | Manager=%s | Dev=%s | QA=%s', env.DISCORD_GUILD_ID, env.MANAGER_BOT_CLIENT_ID, env.DEV_BOT_CLIENT_ID, env.QA_BOT_CLIENT_ID);
+  logger.info(
+    '[App] Discord config: guild=%s | Manager=%s | Dev=%s | QA=%s | Reporter=%s',
+    env.DISCORD_GUILD_ID,
+    env.MANAGER_BOT_CLIENT_ID,
+    env.DEV_BOT_CLIENT_ID,
+    env.QA_BOT_CLIENT_ID,
+    getReporterBotId() ?? 'disabled',
+  );
 
-  // Create and start 3 AgentBot instances
+  // Create and start AgentBot instances
   const managerBot = new AgentBot({
     name: 'Manager',
     token: env.MANAGER_BOT_TOKEN,
@@ -58,14 +67,31 @@ async function main(): Promise<void> {
   devBot.onMention(createMentionHandler(managerBot));
   qaBot.onMention(createMentionHandler(managerBot));
 
-  await Promise.all([managerBot.start(), devBot.start(), qaBot.start()]);
+  const botsToStart: Promise<void>[] = [managerBot.start(), devBot.start(), qaBot.start()];
+  const botsToStop: AgentBot[] = [managerBot, devBot, qaBot];
 
-  // Start 3 workers with pipeline
+  let reporterBot: AgentBot | null = null;
+  if (env.REPORTER_BOT_TOKEN && env.REPORTER_BOT_CLIENT_ID) {
+    reporterBot = new AgentBot({
+      name: 'Reporter',
+      token: env.REPORTER_BOT_TOKEN,
+      clientId: env.REPORTER_BOT_CLIENT_ID,
+    });
+    reporterBot.onMention((msg) => handleReporterMention(msg, reporterBot!));
+    allBotConfigs.push({ clientId: env.REPORTER_BOT_CLIENT_ID, name: 'Reporter' });
+    botsToStart.push(reporterBot.start());
+    botsToStop.push(reporterBot);
+    logger.info('[App] Reporter bot enabled');
+  }
+
+  await Promise.all(botsToStart);
+
+  // Start 3 workers with pipeline (Reporter has no worker)
   const managerWorker = startManagerWorker(managerBot);
   const devWorker = startDevWorker(devBot);
   const qaWorker = startQAWorker(qaBot);
 
-  logger.info('[App] System ready — 3 bots and 3 workers running');
+  logger.info('[App] System ready — 3 pipeline bots + 3 workers' + (reporterBot ? ' + Reporter' : ''));
 
   // Graceful shutdown
   const shutdown = async (signal: string) => {
@@ -73,7 +99,7 @@ async function main(): Promise<void> {
     managerWorker.stop();
     devWorker.stop();
     qaWorker.stop();
-    await Promise.all([managerBot.stop(), devBot.stop(), qaBot.stop()]);
+    await Promise.all(botsToStop.map((b) => b.stop()));
     await closePool();
     logger.info('[App] Shutdown complete');
     process.exit(0);

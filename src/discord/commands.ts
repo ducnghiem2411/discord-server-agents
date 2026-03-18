@@ -40,7 +40,9 @@ export const taskCommand: SlashCommand = {
     const reply = await interaction.editReply({ embeds: [embed] });
 
     logger.info(`[Commands] /task submitted: "${description}" by ${interaction.user.tag}`);
-
+    // #region agent log
+    fetch('http://127.0.0.1:7259/ingest/c10a561b-ea24-499b-b104-580905275518',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'3e870f'},body:JSON.stringify({sessionId:'3e870f',location:'commands.ts:taskCommand',message:'Slash /task executed',data:{desc:description.slice(0,30)},timestamp:Date.now(),hypothesisId:'H6'})}).catch(()=>{});
+    // #endregion
     try {
       const taskService = TaskService.getInstance();
       await taskService.createAndQueueTask({

@@ -13,6 +13,10 @@ const envSchema = z.object({
   QA_BOT_CLIENT_ID: z.string().min(1, 'QA_BOT_CLIENT_ID is required'),
   DISCORD_GUILD_ID: z.string().min(1, 'DISCORD_GUILD_ID is required'),
 
+  // Reporter bot (optional — app runs without it)
+  REPORTER_BOT_TOKEN: z.string().optional(),
+  REPORTER_BOT_CLIENT_ID: z.string().optional(),
+
   // PostgreSQL
   POSTGRES_URL: z.string().min(1, 'POSTGRES_URL is required'),
 

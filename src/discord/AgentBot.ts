@@ -55,7 +55,9 @@ export class AgentBot {
       if (!mention) return;
 
       logger.info(`[AgentBot:${this.config.name}] Mention received from ${message.author.tag}`);
-
+      // #region agent log
+      fetch('http://127.0.0.1:7259/ingest/c10a561b-ea24-499b-b104-580905275518',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'3e870f'},body:JSON.stringify({sessionId:'3e870f',location:'AgentBot.ts:MessageCreate',message:'Bot received mention',data:{botName:this.config.name,msgId:message.id,channelId:message.channelId},timestamp:Date.now(),hypothesisId:'H3'})}).catch(()=>{});
+      // #endregion
       if (this.mentionCallback) {
         try {
           await this.mentionCallback(message);
