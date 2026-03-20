@@ -26,6 +26,14 @@ interface TaskRow {
   updated_at: Date;
 }
 
+interface MessageRow {
+  id: number;
+  task_id: number;
+  agent: string;
+  content: string;
+  created_at: Date;
+}
+
 function rowToTask(row: TaskRow): Task {
   return {
     id: row.id,
@@ -109,6 +117,40 @@ export class TaskService {
   async getTask(taskId: number): Promise<Task | null> {
     const rows = await query<TaskRow>(`SELECT * FROM tasks WHERE id = $1`, [taskId]);
     return rows.length > 0 ? rowToTask(rows[0]) : null;
+  }
+
+  async getTaskMessages(taskId: number): Promise<{ agent: string; content: string }[]> {
+    const rows = await query<MessageRow>(
+      `SELECT id, task_id, agent, content, created_at FROM messages WHERE task_id = $1 ORDER BY created_at ASC`,
+      [taskId],
+    );
+    return rows.map((r) => ({ agent: r.agent, content: r.content }));
+  }
+
+  /**
+   * Load agent outputs from referenced tasks for multi-phase context.
+   * Throws if any task is not found or not completed.
+   */
+  async loadContextFromTasks(taskIds: number[]): Promise<Record<string, string>> {
+    const outputs: Record<string, string> = {};
+
+    for (const taskId of taskIds) {
+      const task = await this.getTask(taskId);
+      if (!task) {
+        throw new Error(`Task #${taskId} not found. Referenced tasks must exist.`);
+      }
+      if (task.status !== 'completed') {
+        throw new Error(`Task #${taskId} is not completed. Referenced tasks must be completed.`);
+      }
+
+      const messages = await this.getTaskMessages(taskId);
+      for (const m of messages) {
+        const key = m.agent.toLowerCase();
+        outputs[key] = m.content;
+      }
+    }
+
+    return outputs;
   }
 
   async updateTaskStatus(taskId: number, status: TaskStatus): Promise<void> {

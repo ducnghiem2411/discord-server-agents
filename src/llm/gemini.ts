@@ -1,29 +1,31 @@
-import { GoogleGenAI } from '@google/genai';
+import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
 import { env } from '../config/env.js';
 import { LLMProvider } from './provider.js';
 import { logger } from '../utils/logger.js';
 
 export class GeminiProvider implements LLMProvider {
-  private ai: GoogleGenAI;
-  private model: string;
+  private model: ChatGoogleGenerativeAI;
 
   constructor() {
     if (!env.GEMINI_API_KEY) {
       throw new Error('GEMINI_API_KEY is required when using the gemini provider');
     }
-    this.ai = new GoogleGenAI({ apiKey: env.GEMINI_API_KEY });
-    this.model = env.GEMINI_MODEL;
+    this.model = new ChatGoogleGenerativeAI({
+      model: env.GEMINI_MODEL,
+      apiKey: env.GEMINI_API_KEY,
+    });
   }
 
   async generate(prompt: string, systemPrompt?: string): Promise<string> {
-    logger.debug(`[Gemini] Generating with model ${this.model}`);
+    logger.debug(`[Gemini] Generating with model ${env.GEMINI_MODEL}`);
 
-    const response = await this.ai.models.generateContent({
-      model: this.model,
-      contents: prompt,
-      config: systemPrompt ? { systemInstruction: systemPrompt } : undefined,
-    });
+    const messages: Array<{ role: 'system' | 'user'; content: string }> = [];
+    if (systemPrompt) {
+      messages.push({ role: 'system', content: systemPrompt });
+    }
+    messages.push({ role: 'user', content: prompt });
 
-    return response.text ?? '';
+    const response = await this.model.invoke(messages);
+    return typeof response.content === 'string' ? response.content : '';
   }
 }

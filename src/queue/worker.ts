@@ -40,25 +40,34 @@ function buildPromptForAgent(
   }
 
   const parts = [`Original Task: ${description}`];
-  if (previousAgents.includes('manager') && outputs.manager) {
+  if ((previousAgents.includes('manager') || outputs.manager) && outputs.manager) {
     parts.push(`\nManager's Plan:\n${outputs.manager}`);
   }
-  if (previousAgents.includes('dev') && outputs.dev) {
+  if ((previousAgents.includes('dev') || outputs.dev) && outputs.dev) {
     parts.push(`\nDev Agent's Implementation:\n${outputs.dev}`);
+  }
+  if ((previousAgents.includes('qa') || outputs.qa) && outputs.qa && agent === 'dev') {
+    parts.push(`\nQA's Review of the Plan:\n${outputs.qa}`);
   }
 
   if (agent === 'dev') {
-    parts.push(
-      previousAgents.includes('manager')
-        ? '\n\nPlease implement the solution based on the plan above.'
-        : '\n\nPlease implement the solution for this task.',
-    );
+    if (outputs.manager && outputs.qa) {
+      parts.push('\n\nPlease implement the solution based on the plan above and QA\'s feedback.');
+    } else if (outputs.manager) {
+      parts.push('\n\nPlease implement the solution based on the plan above.');
+    } else if (outputs.qa) {
+      parts.push('\n\nPlease implement the solution considering QA\'s feedback above.');
+    } else {
+      parts.push('\n\nPlease implement the solution for this task.');
+    }
   } else if (agent === 'qa') {
-    parts.push(
-      previousAgents.includes('dev')
-        ? '\n\nPlease review the implementation above.'
-        : '\n\nPlease review and assess this task.',
-    );
+    if (outputs.dev) {
+      parts.push('\n\nPlease review the implementation above.');
+    } else if (outputs.manager) {
+      parts.push('\n\nPlease review the plan above (before implementation).');
+    } else {
+      parts.push('\n\nPlease review and assess this task.');
+    }
   }
 
   return parts.join('');

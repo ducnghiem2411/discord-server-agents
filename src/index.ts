@@ -57,15 +57,24 @@ async function main(): Promise<void> {
     { clientId: env.QA_BOT_CLIENT_ID, name: 'QA' },
   ];
 
-  const createMentionHandler = (postBot: AgentBot) => (message: import('discord.js').Message) =>
-    handleMention(message, allBotConfigs, (channelId, description) =>
-      postBot.postTaskReceived(channelId, description),
-    );
+  const agentToBot: Record<string, AgentBot> = {
+    manager: managerBot,
+    dev: devBot,
+    qa: qaBot,
+  };
+
+  const postTaskReceived = (channelId: string, description: string, firstAgent: string) => {
+    const bot = agentToBot[firstAgent] ?? managerBot;
+    return bot.postTaskReceived(channelId, description);
+  };
+
+  const createMentionHandler = (message: import('discord.js').Message) =>
+    handleMention(message, allBotConfigs, postTaskReceived);
 
   managerBot.enableSlashCommands(commands);
-  managerBot.onMention(createMentionHandler(managerBot));
-  devBot.onMention(createMentionHandler(managerBot));
-  qaBot.onMention(createMentionHandler(managerBot));
+  managerBot.onMention(createMentionHandler);
+  devBot.onMention(createMentionHandler);
+  qaBot.onMention(createMentionHandler);
 
   const botsToStart: Promise<void>[] = [managerBot.start(), devBot.start(), qaBot.start()];
   const botsToStop: AgentBot[] = [managerBot, devBot, qaBot];

@@ -3,6 +3,7 @@ import { getPipelineFromMentions } from '../config/agents.js';
 import { JobService } from '../services/job.service.js';
 import { TaskService } from '../services/task.service.js';
 import { PipelineJobData } from '../types/task.js';
+import { parseTaskRefs } from '../utils/taskRefs.js';
 import { logger } from '../utils/logger.js';
 
 const processedMessages = new Set<string>();
@@ -19,7 +20,7 @@ export interface BotConfig {
 export async function handleMention(
   message: Message,
   allBotConfigs: BotConfig[],
-  postTaskReceived: (channelId: string, description: string) => Promise<string>,
+  postTaskReceived: (channelId: string, description: string, firstAgent: string) => Promise<string>,
 ): Promise<void> {
   const key = `${message.channelId}:${message.id}`;
   // #region agent log
@@ -54,10 +55,21 @@ export async function handleMention(
   logger.info(`[MentionHandler] Pipeline: ${pipeline.join('→')} for "${description.slice(0, 50)}..."`);
 
   try {
-    // #region agent log
-    fetch('http://127.0.0.1:7259/ingest/c10a561b-ea24-499b-b104-580905275518',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'3e870f'},body:JSON.stringify({sessionId:'3e870f',location:'mentionHandler.ts:handleMention:beforeCreate',message:'About to create task',data:{key,descLen:description.length},timestamp:Date.now(),hypothesisId:'H2'})}).catch(()=>{});
-    // #endregion
     const taskService = TaskService.getInstance();
+
+    const referencedTaskIds = parseTaskRefs(description);
+    let initialOutputs: Record<string, string> = {};
+    if (referencedTaskIds.length > 0) {
+      try {
+        initialOutputs = await taskService.loadContextFromTasks(referencedTaskIds);
+        logger.info(`[MentionHandler] Loaded context from tasks ${referencedTaskIds.join(', ')}`);
+      } catch (refError) {
+        const errMsg = refError instanceof Error ? refError.message : String(refError);
+        await message.reply(errMsg);
+        return;
+      }
+    }
+
     const task = await taskService.tryCreateTaskForMention(
       description,
       message.channelId,
@@ -66,7 +78,7 @@ export async function handleMention(
     );
     if (!task) return;
 
-    const messageId = await postTaskReceived(message.channelId, description);
+    const messageId = await postTaskReceived(message.channelId, description, pipeline[0]);
     await taskService.updateTaskEmbed(task.id, messageId);
 
     const jobData: PipelineJobData = {
@@ -76,7 +88,7 @@ export async function handleMention(
       messageId,
       pipeline,
       currentIndex: 0,
-      outputs: {},
+      outputs: initialOutputs,
     };
     await JobService.getInstance().enqueue(pipeline[0], jobData);
     logger.info(`[MentionHandler] Queued task ${task.id} to ${pipeline[0]} queue`);
