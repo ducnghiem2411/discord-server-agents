@@ -1,5 +1,6 @@
 import { StateGraph, Annotation, END } from '@langchain/langgraph';
 import { ManagerAgent } from '../agents/manager.js';
+import { getLangfuseHandler } from '../llm/langfuse.js';
 import { DevAgent } from '../agents/dev.js';
 import { QAAgent } from '../agents/qa.js';
 import { AgentResult } from '../types/agent.js';
@@ -77,7 +78,9 @@ export interface WorkflowOutput {
 export async function runWorkflow(task: string): Promise<WorkflowOutput> {
   logger.info(`[Workflow] Starting workflow for task: "${task}"`);
 
-  const finalState = await workflow.invoke({ task });
+  const handler = getLangfuseHandler();
+  const runConfig = handler ? { callbacks: [handler] } : {};
+  const finalState = await workflow.invoke({ task }, runConfig);
 
   logger.info('[Workflow] Workflow completed');
 

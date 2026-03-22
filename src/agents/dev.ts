@@ -35,10 +35,10 @@ Write complete, runnable code. Do not leave placeholder comments like "TODO" or 
 export class DevAgent implements Agent {
   name = 'Dev';
 
-  async execute(input: string): Promise<string> {
+  async execute(input: string, options?: import('../types/agent.js').AgentExecuteOptions): Promise<string> {
     logger.info('[DevAgent] Generating implementation');
     const llm = getLLMProvider();
-    const result = await llm.generate(input, SYSTEM_PROMPT);
+    const result = await llm.generate(input, SYSTEM_PROMPT, { callbacks: options?.callbacks });
     logger.info('[DevAgent] Implementation generated');
     return result;
   }

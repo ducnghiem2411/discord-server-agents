@@ -89,6 +89,8 @@ export async function handleMention(
       pipeline,
       currentIndex: 0,
       outputs: initialOutputs,
+      traceId: crypto.randomUUID(),
+      userId: message.author.id,
     };
     await JobService.getInstance().enqueue(pipeline[0], jobData);
     logger.info(`[MentionHandler] Queued task ${task.id} to ${pipeline[0]} queue`);

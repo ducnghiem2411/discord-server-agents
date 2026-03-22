@@ -2,6 +2,7 @@ import { Message } from 'discord.js';
 import { AgentBot } from './AgentBot.js';
 import { ReporterAgent } from '../agents/reporter.js';
 import { isPipelineBot } from '../config/agents.js';
+import { createLangfuseHandler } from '../llm/langfuse.js';
 import { logger } from '../utils/logger.js';
 
 const reporterAgent = new ReporterAgent();
@@ -28,8 +29,15 @@ export async function handleReporterMention(
     return;
   }
 
+  const langfuseHandler = createLangfuseHandler({
+    sessionId: message.channelId,
+    userId: message.author.id,
+    tags: ['reporter'],
+  });
+  const callbacks = langfuseHandler ? [langfuseHandler] : undefined;
+
   try {
-    const response = await reporterAgent.execute(content);
+    const response = await reporterAgent.execute(content, { callbacks });
     const truncated = response.length > 1900 ? response.slice(0, 1900) + '\n...(truncated)' : response;
     await message.reply(truncated);
   } catch (error) {

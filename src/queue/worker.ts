@@ -6,6 +6,7 @@ import { QAAgent } from '../agents/qa.js';
 import { TaskService } from '../services/task.service.js';
 import { AgentBot } from '../discord/AgentBot.js';
 import { AgentResult } from '../types/agent.js';
+import { createLangfuseHandler } from '../llm/langfuse.js';
 import { logger } from '../utils/logger.js';
 
 const POLL_INTERVAL_MS = 1000;
@@ -114,7 +115,7 @@ export interface WorkerHandle {
 function createWorker(
   queueName: string,
   agentName: string,
-  agent: { execute(input: string): Promise<string> },
+  agent: { execute(input: string, options?: { callbacks?: unknown[] }): Promise<string> },
   bot: AgentBot,
 ): WorkerHandle {
   const intervalId = setInterval(async () => {
@@ -123,15 +124,23 @@ function createWorker(
       if (!job) return;
 
       const jobData = job.data;
-      const { taskId, description, channelId, messageId, pipeline, currentIndex, outputs } = jobData;
+      const { taskId, description, channelId, messageId, pipeline, currentIndex, outputs, traceId, userId } = jobData;
 
       logger.info(`[${agentName}Worker] Processing job ${job.id} for task ${taskId}`);
 
       try {
         if (currentIndex === 0) await taskService.updateTaskStatus(taskId, 'running');
 
+        const langfuseHandler = createLangfuseHandler({
+          sessionId: traceId ?? `task-${taskId}`,
+          userId,
+          tags: ['pipeline', agentName],
+          traceMetadata: { taskId, pipeline: pipeline.join('→') },
+        });
+        const callbacks = langfuseHandler ? [langfuseHandler] : undefined;
+
         const prompt = buildPromptForAgent(agentName.toLowerCase(), description, pipeline, outputs);
-        const output = await agent.execute(prompt);
+        const output = await agent.execute(prompt, { callbacks });
 
         await runAgentAndContinue(jobData, agentName.toLowerCase(), output, bot);
         await jobService.completeJob(job.id);

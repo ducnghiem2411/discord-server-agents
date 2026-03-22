@@ -37,10 +37,10 @@ Be thorough but constructive. If the code is good, say so clearly.`;
 export class QAAgent implements Agent {
   name = 'QA';
 
-  async execute(input: string): Promise<string> {
+  async execute(input: string, options?: import('../types/agent.js').AgentExecuteOptions): Promise<string> {
     logger.info('[QAAgent] Reviewing implementation');
     const llm = getLLMProvider();
-    const result = await llm.generate(input, SYSTEM_PROMPT);
+    const result = await llm.generate(input, SYSTEM_PROMPT, { callbacks: options?.callbacks });
     logger.info('[QAAgent] Review completed');
     return result;
   }

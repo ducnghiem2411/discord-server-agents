@@ -1,5 +1,7 @@
 import './config/env.js';
+import './instrumentation.js';
 import { env } from './config/env.js';
+import { shutdownLangfuse } from './llm/langfuse.js';
 import { getReporterBotId } from './config/agents.js';
 import { AgentBot } from './discord/AgentBot.js';
 import { commands } from './discord/commands.js';
@@ -8,6 +10,7 @@ import { handleReporterMention } from './discord/reporterHandler.js';
 import { startManagerWorker, startDevWorker, startQAWorker } from './queue/worker.js';
 import { getPool, closePool } from './memory/postgres.js';
 import { logger } from './utils/logger.js';
+import { sdk } from './instrumentation.js';
 
 async function main(): Promise<void> {
   logger.info('[App] Starting Discord Agent System...');
@@ -110,12 +113,14 @@ async function main(): Promise<void> {
     qaWorker.stop();
     await Promise.all(botsToStop.map((b) => b.stop()));
     await closePool();
+    await shutdownLangfuse();
+    if (sdk) await sdk.shutdown();
     logger.info('[App] Shutdown complete');
     process.exit(0);
   };
 
-  process.on('SIGTERM', () => shutdown('SIGTERM'));
-  process.on('SIGINT', () => shutdown('SIGINT'));
+  process.on('SIGTERM', () => void shutdown('SIGTERM').catch((err) => { logger.error('[App] Shutdown error', err); process.exit(1); }));
+  process.on('SIGINT', () => void shutdown('SIGINT').catch((err) => { logger.error('[App] Shutdown error', err); process.exit(1); }));
 }
 
 main().catch((error) => {

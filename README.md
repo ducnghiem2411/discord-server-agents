@@ -65,10 +65,13 @@ Edit `.env` and fill in:
 | `DISCORD_CLIENT_ID` | Application ID from Discord Developer Portal     |
 | `DISCORD_GUILD_ID`  | Your server (guild) ID                           |
 | `POSTGRES_URL`      | PostgreSQL connection string                     |
-| `LLM_PROVIDER`      | `openai`, `anthropic`, or `qwen`                 |
+| `LLM_PROVIDER`      | `openai`, `anthropic`, `qwen`, or `gemini`       |
 | `OPENAI_API_KEY`    | OpenAI key (if using OpenAI)                     |
 | `ANTHROPIC_API_KEY` | Anthropic key (if using Anthropic)               |
 | `QWEN_API_KEY`      | Qwen/DashScope key (if using Qwen)               |
+| `GEMINI_API_KEY`    | Google AI key (if using Gemini)                  |
+| `LANGFUSE_SECRET_KEY` | Langfuse secret key (optional — tracing)      |
+| `LANGFUSE_PUBLIC_KEY` | Langfuse public key (optional — tracing)      |
 
 ### 3. Prepare the database
 
@@ -163,7 +166,23 @@ ANTHROPIC_API_KEY=sk-ant-...
 # Use Qwen
 LLM_PROVIDER=qwen
 QWEN_API_KEY=sk-...
+
+# Use Gemini
+LLM_PROVIDER=gemini
+GEMINI_API_KEY=...
 ```
+
+## Observability (Langfuse)
+
+Optional: Add [Langfuse](https://langfuse.com/) for tracing, cost tracking, and debugging LLM calls:
+
+```
+LANGFUSE_SECRET_KEY=sk-lf-...
+LANGFUSE_PUBLIC_KEY=pk-lf-...
+LANGFUSE_BASE_URL=https://cloud.langfuse.com
+```
+
+With these set, every LLM generation and LangGraph workflow run is traced to your Langfuse project.
 
 ## Project Structure
 
@@ -183,9 +202,11 @@ src/
 │   └── workflow.ts         # LangGraph state machine (manager→dev→qa)
 ├── llm/
 │   ├── provider.ts         # LLMProvider interface
+│   ├── langfuse.ts         # Langfuse CallbackHandler (optional tracing)
 │   ├── openai.ts           # OpenAI implementation
 │   ├── anthropic.ts        # Anthropic implementation
 │   ├── qwen.ts             # Qwen implementation
+│   ├── gemini.ts           # Gemini implementation
 │   └── index.ts            # Provider factory (env-based selection)
 ├── memory/
 │   ├── postgres.ts         # PostgreSQL pool + query helpers

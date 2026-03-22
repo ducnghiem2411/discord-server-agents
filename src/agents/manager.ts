@@ -34,10 +34,10 @@ Be concise, technical, and precise.`;
 export class ManagerAgent implements Agent {
   name = 'Manager';
 
-  async execute(input: string): Promise<string> {
+  async execute(input: string, options?: import('../types/agent.js').AgentExecuteOptions): Promise<string> {
     logger.info(`[ManagerAgent] Processing task: "${input}"`);
     const llm = getLLMProvider();
-    const result = await llm.generate(input, SYSTEM_PROMPT);
+    const result = await llm.generate(input, SYSTEM_PROMPT, { callbacks: options?.callbacks });
     logger.info('[ManagerAgent] Plan generated');
     return result;
   }

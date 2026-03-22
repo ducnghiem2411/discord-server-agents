@@ -1,6 +1,7 @@
 import { getLLMProvider } from '../llm/index.js';
 import { ReporterService } from '../services/reporter.service.js';
 import { logger } from '../utils/logger.js';
+import type { BaseCallbackHandler } from '@langchain/core/callbacks/base.js';
 
 const REPORT_KEYWORDS = [
   'status',
@@ -31,10 +32,14 @@ function extractTaskId(text: string): number | null {
   return match ? parseInt(match[1], 10) : null;
 }
 
+export interface ReporterExecuteOptions {
+  callbacks?: BaseCallbackHandler[];
+}
+
 export class ReporterAgent {
   private reporterService = ReporterService.getInstance();
 
-  async execute(userMessage: string): Promise<string> {
+  async execute(userMessage: string, options?: ReporterExecuteOptions): Promise<string> {
     const trimmed = userMessage.trim();
     logger.info(`[ReporterAgent] Processing: "${trimmed.slice(0, 80)}..."`);
 
@@ -50,7 +55,7 @@ export class ReporterAgent {
       }
     }
 
-    return this.handleChat(trimmed);
+    return this.handleChat(trimmed, options?.callbacks);
   }
 
   private async handleReportQuery(userMessage: string, taskId: number | null): Promise<string> {
@@ -107,11 +112,11 @@ export class ReporterAgent {
     return out;
   }
 
-  private async handleChat(userMessage: string): Promise<string> {
+  private async handleChat(userMessage: string, callbacks?: BaseCallbackHandler[]): Promise<string> {
     const llm = getLLMProvider();
     const systemPrompt = `You are Reporter, a friendly assistant in a Discord server with AI agents (Manager, Dev, QA).
 You can chat normally and answer questions. When users ask about task progress or status, you can query the database — but for this chat, just respond conversationally.
 Keep responses concise and helpful.`;
-    return llm.generate(userMessage, systemPrompt);
+    return llm.generate(userMessage, systemPrompt, callbacks ? { callbacks } : undefined);
   }
 }

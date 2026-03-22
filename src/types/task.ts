@@ -21,6 +21,10 @@ export interface PipelineJobData {
   pipeline: string[];
   currentIndex: number;
   outputs: Record<string, string>;
+  /** Langfuse trace ID for unified tracing across pipeline agents */
+  traceId?: string;
+  /** Discord user ID for trace attribution */
+  userId?: string;
 }
 
 export type ManagerJobData = PipelineJobData;
