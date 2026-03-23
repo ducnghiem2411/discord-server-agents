@@ -1,4 +1,4 @@
-import { StateGraph, Annotation, END } from '@langchain/langgraph';
+import { StateGraph, Annotation, END, START } from '@langchain/langgraph';
 import { ManagerAgent } from '../agents/manager.js';
 import { getLangfuseHandler } from '../llm/langfuse.js';
 import { DevAgent } from '../agents/dev.js';
@@ -58,7 +58,7 @@ function buildWorkflow() {
     .addNode('manager', runManager)
     .addNode('dev', runDev)
     .addNode('qa', runQA)
-    .addEdge('__start__', 'manager')
+    .addEdge(START, 'manager')
     .addEdge('manager', 'dev')
     .addEdge('dev', 'qa')
     .addEdge('qa', END);

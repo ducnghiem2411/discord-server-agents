@@ -1,28 +1,44 @@
-# Xây dựng AI Agents: Thiết kế hệ thống, theo dõi và tối ưu chi phí
+  
+Xây dựng AI Agents: Thiết kế hệ thống, theo dõi và tối ưu chi phí
 
 ---
 
 ## 1. Problem — Vấn đề khi sử dụng các công cụ AI
 
-- **Quản lí state:** LLM, Tool không nhớ gì giữa các lần gọi hoặc state giữa các lần gọi có thể bị lẫn lộn, có thể kết quả bước trước cho bước sau, người dùng phải tự quản lý.
+- **Quản lí state:** LLM, Tool không nhớ gì giữa các lần gọi và người dùng phải tự quản lý, hoặc state giữa các lần gọi có thể bị lẫn lộn làm ảnh hưởng kết quả cho bước sau.
 - **Control flow:** Khó có thể phân nhánh, loop, retry hay dừng có điều kiện dựa trên nhiều điều kiện như output model llm, state từ bên ngoài, data trong hệ thống.
-- **Kết hợp nhiều agent:** Nếu cần nhiều model chuyên biệt phối hợp, phải tự xây logic điều phối.
-- **Không tracing, không cost visibility:** Không biết bước nào tốn token, chạy bao lâu, lỗi ở đâu.
-- **Khó mở rộng:** Thêm bước, thêm agent, hay thay đổi thứ tự xử lý yêu cầu sửa logic từ đầu.
-
-Kết quả: các dự án AI thực tế thường kết thúc bằng một mớ `if/else` quấn quanh các LLM call — không scale, không maintain được.
+- **Kết hợp nhiều agent:** Sẽ gặp khó khăn nếu cần nhiều model chuyên biệt phối hợp trong từng hoàn cảnh cụ thể, lúc này sẽ phải thực hiện thủ công hoặc viết thêm logic khiến flow phức tạp hơn
+- **Tracing, Cost control:** Khó để phát hiện biết bước nào tốn token, system prompt, memory sinh ra thêm từ đâu, bị update lúc nào, chạy bao lâu, vấn đề phát sinh từ đâu.
+- **Mở rộng:** Flow thêm bước, thêm công cụ tuỳ chỉnh, thêm agent, hay thay đổi thứ tự xử lý có thể gặp sẽ khó khăn hoặc việc mở rộng phụ thuộc vào tài nguyên phần mềm cho sẵn
 
 ---
 
-## 2. What — LangGraph là gì?
+## 2. LangChain & LangGraph là gì?
 
-LangGraph là framework để xây dựng AI agent workflows dưới dạng **đồ thị có hướng** (directed graph), trong đó:
+### LangChain
+
+LangChain là framework để kết nối LLM với các thành phần bên ngoài: tool, memory, data source, callback…
+
+Những gì LangChain cung cấp:
+
+- **LLM providers:** Abstraction thống nhất cho OpenAI, Anthropic, Gemini, Qwen — đổi provider không cần sửa code
+- **Prompt templates:** Quản lý system prompt, few-shot, template có biến
+- **Callback / tracing:** Hook vào mọi LLM call để log, trace, đo token
+- **Memory & retrieval:** ConversationMemory, VectorStore retriever cho RAG
+
+Phù hợp cho: single agent, single LLM call, chuỗi prompt đơn giản.
+
+### LangGraph
+
+LangGraph xây dựng trên LangChain, giải quyết bài toán LangChain chưa tập trung vào: **multi-step, multi-agent, stateful workflow**.
+
+Thay vì viết code tuần tự `bước1() → bước2() → bước3()`, bạn khai báo workflow dưới dạng **đồ thị có hướng** (directed graph):
 
 - **Node** = một bước xử lý (gọi LLM, gọi tool, logic điều kiện…)
 - **Edge** = luồng dữ liệu từ bước này sang bước khác
 - **State** = object dùng chung, truyền qua toàn bộ graph, mỗi node đọc và ghi vào state
 
-Thay vì viết code tuần tự `bước1() → bước2() → bước3()`, bạn khai báo graph: node nào nối với node nào, state trông như thế nào. LangGraph compile graph đó thành một executor có thể resume, replay, và trace từng bước.
+LangGraph compile graph đó thành một executor có thể resume, replay, và trace từng bước.
 
 Ví dụ workflow thực tế trong project này:
 
@@ -40,32 +56,30 @@ Mỗi node chỉ đọc phần state nó cần, ghi lại output của mình —
 
 ---
 
-## 3. Why — Tại sao LangGraph thay vì prompt chaining hay function calling thuần túy?
+## 3. Tại sao LangGraph thay vì prompt chaining hay function calling thuần túy?
 
-### Prompt chaining thuần túy
+### Prompt chaining
 
-Cách đơn giản nhất: gọi LLM, lấy output, nhét vào prompt tiếp theo. Vấn đề:
+Gọi LLM, lấy tất cả input - output, nhét vào prompt tiếp theo. Vấn đề:
 
-- State phải tự quản lý — dễ mất sync khi nhiều bước
-- Không có cấu trúc: không biết đang ở bước nào, còn bao nhiêu bước
-- Không thể rẽ nhánh hay lặp có điều kiện
-- Khi debug, không biết bước nào sai
+- State, memory: prompt cồng kềnh, không tối ưu, phải tự quản lý, dễ mất đồng bộ khi flow có nhiều bước
+- Cấu trúc: gặp khó khăn để xác định đang ở bước nào, còn bao nhiêu bước, quan sát khi flow có rẽ nhánh hay lặp có điều kiện
+- Debug: mất nhiều thời gian để xác định bước nào sai, bước nào gặp vấn đề
 
 ### Function calling (tool use)
 
 Cho phép LLM tự chọn và gọi tool. Tốt cho agent đơn lẻ cần dùng tool, nhưng:
 
-- Vẫn là single-agent: khó phân chia trách nhiệm rõ ràng
-- Không kiểm soát được thứ tự thực thi
-- Không có state machine: LLM tự quyết, không thể enforce flow
+- Thực thi: không thể dự đoán chính xác được output và từ đó khó kiểm soát flow
+- State machine: LLM tự quyết, không thể can thiệp vào những phần giữa flow, có rủi ro bị tấn công nếu tool tích hợp những quyền nhạy cảm như sửa file, đọc file, chạy code,..
 
-### LangGraph
+### So sánh chung
 
 
 | Tiêu chí         | Prompt chaining | Function calling | LangGraph   |
 | ---------------- | --------------- | ---------------- | ----------- |
 | State management | Manual          | Partial          | Built-in    |
-| Control flow     | Không có        | LLM quyết        | Declarative |
+| Control flow     | Manual          | LLM quyết        | Declarative |
 | Multi-agent      | Khó             | Khó              | Native      |
 | Observability    | Không           | Partial          | Full trace  |
 | Retry / resume   | Phải tự làm     | Phải tự làm      | Có sẵn      |
@@ -73,7 +87,7 @@ Cho phép LLM tự chọn và gọi tool. Tốt cho agent đơn lẻ cần dùng
 
 ---
 
-## 4. How — Graph-based orchestration hoạt động thế nào?
+## 4. Graph-based orchestration hoạt động thế nào?
 
 LangGraph xây workflow theo 3 khái niệm:
 
@@ -103,7 +117,28 @@ Khi `workflow.invoke()` được gọi:
 
 ---
 
-## 5. Use — Xây agent flow trong thực tế
+1. When — Khi nào nên dùng LangGraph?
+
+**Nên dùng khi:**
+
+- Workflow có nhiều bước và phụ thuộc nhau, phụ thuộc vào nhiều trạng thái khác và cần chia nhỏ 
+- Cần nhiều agent với vai trò khác nhau phối hợp, có rẽ nhánh flow, rẽ nhánh model cho các trường hợp
+- Cần trace, optimize chi tiết từng bước
+- Workflow có thể thay đổi và cập nhật phức tạp hơn về sau
+
+LangGraph phù hợp nhất khi workflow có nhiều bước phụ thuộc nhau:
+
+- **Software development pipeline:** Phân tích → Lập kế hoạch → Implement → Review → Test
+
+**Không cần dùng khi:**
+
+- Agent đơn lẻ, gọi tool thực thi, truy vấn đơn giản
+- Không cần state hoặc state rất đơn giản
+- Workflow ngắn, thẳng, cố định, không rẽ nhánh, không loop, không retry phức tạp  
+  
+----
+
+6.Xây agent flow trong thực tế
 
 Trong project này, workflow gồm 3 agent chạy tuần tự:
 
@@ -119,62 +154,26 @@ Ngoài ra, hệ thống hỗ trợ **pipeline động**: user có thể @mention
 
 ---
 
-## 6. Where — Multi-step workflows
-
-LangGraph phù hợp nhất khi workflow có nhiều bước phụ thuộc nhau:
-
-- **Software development pipeline:** Phân tích → Lập kế hoạch → Implement → Review → Test
-- **Content pipeline:** Research → Draft → Edit → Publish
-- **Data pipeline:** Extract → Transform → Validate → Load
-- **Support workflow:** Classify → Retrieve context → Generate response → Escalate nếu cần
-
-Trong tất cả các trường hợp này, output bước trước là input bước sau — và bạn cần control flow rõ ràng, không phải LLM tự quyết.
-
----
-
-## 7. When — Khi nào nên dùng LangGraph?
-
-**Nên dùng khi:**
-
-- Workflow có nhiều hơn 2–3 bước phụ thuộc nhau
-- Cần nhiều agent với vai trò khác nhau phối hợp
-- Cần conditional routing: rẽ nhánh dựa trên output của model
-- Cần tracing và observability chi tiết từng bước
-- Workflow có thể thay đổi (thêm bước, đổi thứ tự) mà không muốn refactor toàn bộ code
-
-**Không cần dùng khi:**
-
-- Single agent, single LLM call
-- Không cần state hoặc state rất đơn giản
-- Workflow cố định 1–2 bước, không có branching
-
----
-
-## 8. Trade-offs
+## 7. Trade-offs
 
 ### Complexity
 
-LangGraph thêm một lớp abstraction. Với workflow đơn giản, nó có thể là over-engineering. Cần thời gian để hiểu model: state schema, reducers, edge types.
-
-### Debugging
-
-Khi có lỗi, phải trace qua graph để xác định node nào sai. Không có Langfuse, việc này khó hơn nhiều so với code tuần tự.
+Với workflow đơn giản, nó có thể là over-engineering.  
+Cần thời gian để hiểu framework: node, state schema, edge type,...  
+Không  
+Tự setup infrastructure xoay quanh để phục vụ hệ thống agents  
+=> Cần biết thêm về infra liên quan để có thể setup hoành chỉnh  
+=> Mất nhiều thời gian để cho ra 1 prototype workflow
 
 ### Cost
 
-Multi-agent = nhiều LLM call. Một task qua 3 agent có thể tốn token gấp 3–5 lần so với 1 call. Cần chiến lược tối ưu rõ ràng (xem phần Observability).
-
-### Latency
-
-Các bước chạy tuần tự cộng dồn latency. Nếu mỗi agent tốn 5–10 giây, 3 agent = 15–30 giây. Cần thiết kế pipeline hợp lý, chỉ thêm agent khi thực sự cần.
-
-### Vendor dependency
-
-LangGraph là thư viện của LangChain. Có learning curve và API thay đổi qua các version. Cần cân nhắc nếu muốn minimize dependencies.
+Multi-agent = nhiều LLM call.  
+Một task đơn giản mà vẫn đi qua 3 agent có thể tốn token gấp 3–5 lần so với 1 call.  
+Cần chiến lược tối ưu rõ ràng.
 
 ---
 
-## 9. Demo — Agent system
+## 8. Demo — Agent system
 
 Hệ thống gồm 4 bot Discord, mỗi bot là một agent độc lập:
 
@@ -209,9 +208,9 @@ Mỗi agent nhận đúng context cần thiết, không hơn không kém. User t
 
 ---
 
-## 10. Observability — Langfuse
+## 9. Observability — Langfuse
 
-Mỗi agent call được trace tự động qua Langfuse `CallbackHandler` tích hợp với LangChain. Ngoài ra, `LangfuseSpanProcessor` (OpenTelemetry) trace toàn bộ workflow bao gồm cả infrastructure code.
+Mỗi agent call được trace tự động qua Langfuse`CallbackHandler` tích hợp với LangChain. Ngoài ra, `LangfuseSpanProcessor`trace toàn bộ workflow bao gồm cả infrastructure code.
 
 **Mỗi trace bao gồm:**
 
