@@ -88,9 +88,19 @@ Cho phép LLM tự chọn và gọi tool. Tốt cho agent đơn lẻ cần dùng
 
 ## 4. Graph-based orchestration hoạt động thế nào?
 
-LangGraph xây workflow theo 3 khái niệm:
+Ví dụ pipeline 3 bước nếu viết code thông thường:
 
-**State schema:** Định nghĩa "bộ nhớ" chung của workflow. Mỗi field trong state có thể có reducer riêng — ví dụ mảng `results` tự động merge thay vì ghi đè.
+```typescript
+const plan = await manager(task)
+const code = await dev(task, plan)
+const review = await qa(task, plan, code)
+```
+
+Đơn giản — nhưng khi pipeline phức tạp hơn (nhiều bước, rẽ nhánh, retry), code này rất khó quản lý. LangGraph giải quyết bằng 3 khái niệm:
+
+**State — cái túi dùng chung**
+
+Thay vì truyền tham số qua lại giữa các hàm, tất cả dữ liệu nằm trong một object dùng chung. Mỗi bước đọc từ State, ghi kết quả vào State — không ai truyền tay cho ai.
 
 ```
 State {
@@ -102,16 +112,24 @@ State {
 }
 ```
 
-**Nodes:** Hàm async nhận state, trả về partial state update. Node không biết về node khác — chỉ đọc state nó cần, ghi output của mình.
+**Node — mỗi bước là một hàm độc lập**
 
-**Edges:** Khai báo luồng dữ liệu. Có thể là cạnh tĩnh (`manager → dev`) hoặc cạnh động (conditional edge — node quyết định bước tiếp theo dựa trên output).
+Node chỉ biết: đọc gì từ State, ghi gì vào State. Không quan tâm bước trước là gì, bước sau là gì — hoàn toàn decoupled.
 
-Khi `workflow.invoke()` được gọi:
+**Edge — thứ tự khai báo trong config, không phải trong code**
 
-1. LangGraph chạy node đầu tiên với state ban đầu
-2. Merge partial update vào state
-3. Theo edge, chạy node tiếp theo
-4. Lặp cho đến khi đến `END`
+```
+manager → dev → qa → END
+```
+
+Thứ tự nằm ở chỗ khai báo graph, không rải rác trong logic code. Muốn thêm bước hay đổi thứ tự → sửa graph, không đụng đến từng node.
+
+Khi `workflow.invoke()` được gọi, LangGraph tự động:
+
+1. Chạy node đầu tiên với state ban đầu
+2. Ghi kết quả vào state
+3. Nhìn edge → xác định node tiếp theo
+4. Lặp cho đến `END`
 5. Trả về state cuối cùng
 
 ---
@@ -120,7 +138,7 @@ Khi `workflow.invoke()` được gọi:
 
 **Nên dùng khi:**
 
-- Workflow có nhiều bước và phụ thuộc nhau, phụ thuộc vào nhiều trạng thái khác và cần chia nhỏ 
+- Workflow có nhiều bước và phụ thuộc nhau, phụ thuộc vào nhiều trạng thái khác nhau
 - Cần nhiều agent với vai trò khác nhau phối hợp, có rẽ nhánh flow, rẽ nhánh model cho các trường hợp
 - Cần trace, optimize chi tiết từng bước
 - Workflow có thể thay đổi và cập nhật phức tạp hơn về sau
@@ -219,8 +237,6 @@ Mỗi agent call được trace tự động qua Langfuse`CallbackHandler` tích
 
 **Metadata gắn vào mỗi trace:**
 
-- `sessionId` — trace ID của task (end-to-end)
-- `userId` — Discord user ID
 - `tags` — `['pipeline', 'Manager']` v.v.
 - `traceMetadata` — agent name, task ID, pipeline order
 
@@ -234,13 +250,29 @@ Mỗi agent call được trace tự động qua Langfuse`CallbackHandler` tích
 **Chiến lược tối ưu cost dựa trên data:**
 
 
-| Chiến lược         | Mô tả                                                                |
-| ------------------ | -------------------------------------------------------------------- |
-| Model tiering      | Agent đơn giản dùng model rẻ; agent phức tạp dùng model mạnh         |
-| Provider selection | Qwen/Gemini cho task thường; OpenAI/Anthropic cho task quan trọng    |
-| Prompt compression | Cắt context thừa, giữ phần model thực sự cần                         |
-| Context pruning    | Chỉ load output của task được tham chiếu, không load toàn bộ lịch sử |
-| Caching            | Semantic cache với pgvector cho câu hỏi tương tự                     |
-| Token budgeting    | Giới hạn max_tokens để tránh output quá dài không cần thiết          |
+| Chiến lược         | Mô tả                                                                                            |
+| ------------------ | ------------------------------------------------------------------------------------------------ |
+| Model tiering      | Agent đơn giản dùng model rẻ; agent phức tạp dùng model mạnh                                     |
+| Provider selection | Qwen/Gemini cho task thường; OpenAI/Anthropic cho task quan trọng                                |
+| Prompt compression | Cắt context thừa, giữ phần model thực sự cần                                                     |
+| Context pruning    | Chỉ load output của task được tham chiếu, không load toàn bộ lịch sử                             |
+| Semantic caching   | Semantic cache với pgvector cho câu hỏi tương tự — không gọi LLM                                 |
+| Prompt caching     | Cache phần system prompt cố định (Anthropic/OpenAI) — tính phí 1 lần, tái dùng nhiều lần         |
+| Batching           | Gom nhiều request lại gửi 1 lần qua Batch API — giá rẻ hơn ~50%, phù hợp task không cần realtime |
+| Token budgeting    | Giới hạn max_tokens để tránh output quá dài không cần thiết                                      |
 
+
+---
+
+## 10. Tổng kết
+
+### Phù hợp khi
+
+- Workflow có nhiều bước, nhiều agent phối hợp, rẽ nhánh, loop, retry và workflow được update thường xuyên.
+- Cần trace, đo cost và debug từng agent trong production
+
+### Không phù hợp khi
+
+- Chỉ cần 1–2 LLM call đơn giản, pipeline đơn giản — thêm framework là over-engineering
+- Startup/indie hacker cần prototype nhanh một workflow, workflow tuổi đời ngắn
 
