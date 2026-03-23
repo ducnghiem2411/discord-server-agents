@@ -2,7 +2,7 @@
 
 ---
 
-## 1. Các vấn đề khi sử dụng AI — Tại sao không dùng thẳng ChatGPT?
+## 1. Các vấn đề khi sử dụng AI?
 
 Khi dùng ChatGPT trực tiếp để xử lý công việc trong hệ thống thực tế, bạn gặp nhiều hạn chế:
 
@@ -19,6 +19,25 @@ Khi dùng ChatGPT trực tiếp để xử lý công việc trong hệ thống t
 **Reliability và multi-tenancy:** Nhiều channel, nhiều người dùng cần xử lý độc lập, tránh trùng lặp, có retry khi lỗi. Agent với queue và persistence giúp kiểm soát điều này.
 
 Tóm lại, xây AI agent system là để kiểm soát được workflow, chi phí, observability và scale — thay vì phụ thuộc vào chat UI.
+
+### Khi nào dùng Chat UI, OpenClaw (ClawDBot), khi nào dùng LangGraph?
+
+| Phương án | Phù hợp khi | Hạn chế chính |
+|-----------|-------------|---------------|
+| **Chat UI** (ChatGPT, Claude.ai, v.v.) | Thử nghiệm nhanh, trò chuyện 1–1, demo concept, không cần automation hay tracking. | Không scale, không observability, không kiểm soát chi phí, workflow do người dùng điều khiển từng bước. |
+| **OpenClaw (ClawDBot)** | Cần bot AI đa nền tảng (Discord, Telegram, Slack…) với nhiều skill sẵn; triển khai nhanh; không cần custom workflow phức tạp; chấp nhận "hộp đen". | Ít kiểm soát quy trình, khó trace cost theo task, workflow mặc định, khó custom cho nghiệp vụ riêng. |
+| **LangGraph** (custom agent system) | Cần workflow đa bước, multi-agent, rẽ nhánh conditional, chạy song song; cần kiểm soát cost, observability và scale; có quy trình nghiệp vụ cụ thể (phân tích → lập kế hoạch → thực hiện → review). | Phức tạp hơn, cần tự xây hạ tầng; nhưng kiểm soát tối đa. |
+
+### Khi nào nên dùng LangGraph?
+
+- **Workflow nhiều bước có điều kiện:** Cần rẽ nhánh theo kết quả (vd: đủ thông tin thì tiếp tục, thiếu thì hỏi thêm hoặc báo lỗi).
+- **Multi-agent:** Nhiều agent với vai trò khác nhau (vd: manager → dev → QA) cần phối hợp theo trình tự trong một pipeline.
+- **Cần chạy song song hoặc vòng lặp:** Một số bước chạy song song, hoặc lặp lại cho đến khi thỏa mãn điều kiện.
+- **Cần debug và trace rõ ràng:** Mỗi bước là một node, dễ trace input/output, cost, latency theo từng node.
+- **Cần persistence và checkpoint:** Lưu state giữa chừng, cho phép resume khi gián đoạn hoặc retry theo từng đoạn.
+- **Yêu cầu observability và kiểm soát chi phí:** Ghép với Langfuse/OpenTelemetry để trace end-to-end theo task, user, agent.
+
+**Khi không cần LangGraph:** Chat đơn giản một vòng (user gửi → model trả lời), chatbot không có workflow phức tạp, hoặc dùng OpenClaw/solution có sẵn đủ nhu cầu. Trong trường hợp đó, LangChain chain đơn giản hoặc API gọi trực tiếp thường đủ và đơn giản hơn.
 
 ---
 

@@ -135,7 +135,7 @@ function createWorker(
           sessionId: traceId ?? `task-${taskId}`,
           userId,
           tags: ['pipeline', agentName],
-          traceMetadata: { taskId, pipeline: pipeline.join('→') },
+          traceMetadata: { agent: agentName, taskId, pipeline: pipeline.join('→') },
         });
         const callbacks = langfuseHandler ? [langfuseHandler] : undefined;
 

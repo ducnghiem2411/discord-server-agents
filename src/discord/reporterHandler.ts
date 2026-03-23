@@ -33,6 +33,7 @@ export async function handleReporterMention(
     sessionId: message.channelId,
     userId: message.author.id,
     tags: ['reporter'],
+    traceMetadata: { agent: 'Reporter' },
   });
   const callbacks = langfuseHandler ? [langfuseHandler] : undefined;
 
