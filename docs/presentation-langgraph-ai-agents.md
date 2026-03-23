@@ -1,4 +1,3 @@
-  
 Xây dựng AI Agents: Thiết kế hệ thống, theo dõi và tối ưu chi phí
 
 ---
@@ -117,7 +116,7 @@ Khi `workflow.invoke()` được gọi:
 
 ---
 
-1. When — Khi nào nên dùng LangGraph?
+## 5. When — Khi nào nên dùng LangGraph?
 
 **Nên dùng khi:**
 
@@ -126,19 +125,19 @@ Khi `workflow.invoke()` được gọi:
 - Cần trace, optimize chi tiết từng bước
 - Workflow có thể thay đổi và cập nhật phức tạp hơn về sau
 
-LangGraph phù hợp nhất khi workflow có nhiều bước phụ thuộc nhau:
+Ví dụ:
 
-- **Software development pipeline:** Phân tích → Lập kế hoạch → Implement → Review → Test
+- **Software development pipeline:** Phân tích → Lập kế hoạch → Chia nhỏ task → Implement → Review → Test
 
 **Không cần dùng khi:**
 
 - Agent đơn lẻ, gọi tool thực thi, truy vấn đơn giản
 - Không cần state hoặc state rất đơn giản
-- Workflow ngắn, thẳng, cố định, không rẽ nhánh, không loop, không retry phức tạp  
-  
-----
+- Workflow ngắn, thẳng, cố định, không rẽ nhánh, không loop, không retry phức tạp
 
-6.Xây agent flow trong thực tế
+---
+
+## 6. Use — Xây agent flow trong thực tế
 
 Trong project này, workflow gồm 3 agent chạy tuần tự:
 
@@ -160,10 +159,9 @@ Ngoài ra, hệ thống hỗ trợ **pipeline động**: user có thể @mention
 
 Với workflow đơn giản, nó có thể là over-engineering.  
 Cần thời gian để hiểu framework: node, state schema, edge type,...  
-Không  
 Tự setup infrastructure xoay quanh để phục vụ hệ thống agents  
-=> Cần biết thêm về infra liên quan để có thể setup hoành chỉnh  
-=> Mất nhiều thời gian để cho ra 1 prototype workflow
+→ Cần biết thêm về infra liên quan để có thể setup hoành chỉnh  
+→ Mất nhiều thời gian để cho ra 1 prototype workflow
 
 ### Cost
 
