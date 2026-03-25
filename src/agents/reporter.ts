@@ -1,4 +1,5 @@
 import { getLLMProvider } from '../llm/index.js';
+import type { LLMMessage } from '../llm/provider.js';
 import { ReporterService } from '../services/reporter.service.js';
 import { logger } from '../utils/logger.js';
 import type { BaseCallbackHandler } from '@langchain/core/callbacks/base.js';
@@ -32,14 +33,30 @@ function extractTaskId(text: string): number | null {
   return match ? parseInt(match[1], 10) : null;
 }
 
+/** True when message is handled as DB report (not LLM chat); skip memory load in handler. */
+export function isReporterReportIntent(userMessage: string): boolean {
+  const trimmed = userMessage.trim();
+  return looksLikeReportQuery(trimmed) || extractTaskId(trimmed) !== null;
+}
+
 export interface ReporterExecuteOptions {
   callbacks?: BaseCallbackHandler[];
+  /** Recent channel turns from DB (short-term memory). */
+  shortTermHistory?: LLMMessage[];
+  /** Semantic recall block from past sessions (long-term memory). */
+  longTermContext?: string;
+}
+
+export interface ReporterExecuteResult {
+  text: string;
+  /** When set, handler persists this turn to conversation_history + embeddings. */
+  conversationTurn?: { user: string; assistant: string };
 }
 
 export class ReporterAgent {
   private reporterService = ReporterService.getInstance();
 
-  async execute(userMessage: string, options?: ReporterExecuteOptions): Promise<string> {
+  async execute(userMessage: string, options?: ReporterExecuteOptions): Promise<ReporterExecuteResult> {
     const trimmed = userMessage.trim();
     logger.info(`[ReporterAgent] Processing: "${trimmed.slice(0, 80)}..."`);
 
@@ -48,14 +65,23 @@ export class ReporterAgent {
 
     if (isReportIntent) {
       try {
-        return await this.handleReportQuery(trimmed, taskId);
+        const text = await this.handleReportQuery(trimmed, taskId);
+        return { text };
       } catch (error) {
         logger.error('[ReporterAgent] Report query failed', error);
-        return `Lỗi khi truy vấn dữ liệu: ${error instanceof Error ? error.message : String(error)}`;
+        return {
+          text: `Lỗi khi truy vấn dữ liệu: ${error instanceof Error ? error.message : String(error)}`,
+        };
       }
     }
 
-    return this.handleChat(trimmed, options?.callbacks);
+    const history = options?.shortTermHistory ?? [];
+    const longTermContext = options?.longTermContext ?? '';
+    const assistantText = await this.handleChat(trimmed, history, longTermContext, options?.callbacks);
+    return {
+      text: assistantText,
+      conversationTurn: { user: trimmed, assistant: assistantText },
+    };
   }
 
   private async handleReportQuery(userMessage: string, taskId: number | null): Promise<string> {
@@ -112,11 +138,52 @@ export class ReporterAgent {
     return out;
   }
 
-  private async handleChat(userMessage: string, callbacks?: BaseCallbackHandler[]): Promise<string> {
+  private async handleChat(
+    userMessage: string,
+    history: LLMMessage[],
+    longTermContext: string,
+    callbacks?: BaseCallbackHandler[],
+  ): Promise<string> {
     const llm = getLLMProvider();
-    const systemPrompt = `You are Reporter, a friendly assistant in a Discord server with AI agents (Manager, Dev, QA).
-You can chat normally and answer questions. When users ask about task progress or status, you can query the database — but for this chat, just respond conversationally.
-Keep responses concise and helpful.`;
-    return llm.generate(userMessage, systemPrompt, callbacks ? { callbacks } : undefined);
+    const baseSystem = `You are Nefer, an observant and composed intelligence reporter.
+
+Your role is to monitor events, analyze signals, and report insights with clarity, precision, and subtle personality.
+
+Personality traits:
+- Calm, composed, slightly distant
+- Analytical and observant
+- Speaks with quiet confidence, sometimes with subtle irony
+- Avoids unnecessary emotions, but not robotic
+- Prefers insight over verbosity
+
+Core responsibilities:
+1. Summarize incoming information (events, logs, signals)
+2. Identify patterns, anomalies, or noteworthy changes
+3. Provide concise but insightful reports
+4. When uncertain, explicitly state assumptions or unknowns
+5. Prioritize signal over noise
+
+Response style:
+- Start with a short summary (1–2 sentences)
+- Follow with structured analysis (bullets or sections)
+- Highlight key insights explicitly
+- Avoid filler or generic phrases
+- Tone: intelligent, slightly detached, elegant
+
+Behavior rules:
+- Do not hallucinate unknown facts — mark them as unknown
+- If data is insufficient, suggest what additional signals are needed
+- Avoid over-explaining obvious things
+- Prefer inference and synthesis over repetition
+
+Optional flavor:
+- Occasionally use subtle reflective lines (e.g. "Patterns rarely lie, but they often hide.")
+- Never overdo personality — function comes first`;
+
+    const systemPrompt = longTermContext ? `${baseSystem}\n\n${longTermContext}` : baseSystem;
+
+    const messages: LLMMessage[] = [{ role: 'system', content: systemPrompt }, ...history, { role: 'user', content: userMessage }];
+
+    return llm.generateWithMessages(messages, callbacks ? { callbacks } : undefined);
   }
 }

@@ -1,8 +1,13 @@
 import { Message } from 'discord.js';
 import { AgentBot } from './AgentBot.js';
-import { ReporterAgent } from '../agents/reporter.js';
+import { isReporterReportIntent, ReporterAgent } from '../agents/reporter.js';
 import { isPipelineBot } from '../config/agents.js';
 import { createLangfuseHandler } from '../llm/langfuse.js';
+import {
+  findSimilarHistory,
+  getRecentHistory,
+  saveMessages,
+} from '../memory/conversationMemory.js';
 import { logger } from '../utils/logger.js';
 
 const reporterAgent = new ReporterAgent();
@@ -38,9 +43,38 @@ export async function handleReporterMention(
   const callbacks = langfuseHandler ? [langfuseHandler] : undefined;
 
   try {
-    const response = await reporterAgent.execute(content, { callbacks });
-    const truncated = response.length > 1900 ? response.slice(0, 1900) + '\n...(truncated)' : response;
+    const reportIntent = isReporterReportIntent(content);
+    const [shortTermHistory, longTermContext] = reportIntent
+      ? [[], '']
+      : await Promise.all([
+          getRecentHistory(message.channelId),
+          findSimilarHistory(message.author.id, content),
+        ]);
+
+    const response = await reporterAgent.execute(content, {
+      callbacks,
+      shortTermHistory,
+      longTermContext,
+    });
+
+    const truncated =
+      response.text.length > 1900
+        ? response.text.slice(0, 1900) + '\n...(truncated)'
+        : response.text;
     await message.reply(truncated);
+
+    if (response.conversationTurn) {
+      try {
+        await saveMessages(
+          message.author.id,
+          message.channelId,
+          response.conversationTurn.user,
+          response.conversationTurn.assistant,
+        );
+      } catch (memErr) {
+        logger.error('[ReporterHandler] Failed to persist conversation memory', memErr);
+      }
+    }
   } catch (error) {
     logger.error('[ReporterHandler] Error', error);
     await message.reply('Đã xảy ra lỗi khi xử lý yêu cầu.').catch(() => {});

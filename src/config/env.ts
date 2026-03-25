@@ -21,9 +21,12 @@ const envSchema = z.object({
   POSTGRES_URL: z.string().min(1, 'POSTGRES_URL is required'),
 
   // LLM
-  LLM_PROVIDER: z.enum(['openai', 'anthropic', 'qwen', 'gemini']).default('openai'),
+  LLM_PROVIDER: z.enum(['openai', 'anthropic', 'qwen', 'gemini', 'deepseek']).default('openai'),
   OPENAI_API_KEY: z.string().optional(),
   OPENAI_MODEL: z.string().default('gpt-4o'),
+  /** Reporter long-term memory: Ollama embedding API (e.g. nomic-embed-text, 768-dim). */
+  OLLAMA_BASE_URL: z.string().default('http://localhost:11434'),
+  OLLAMA_EMBEDDING_MODEL: z.string().default('nomic-embed-text'),
   ANTHROPIC_API_KEY: z.string().optional(),
   ANTHROPIC_MODEL: z.string().default('claude-3-5-sonnet-20241022'),
   QWEN_API_KEY: z.string().optional(),
@@ -31,6 +34,9 @@ const envSchema = z.object({
   QWEN_BASE_URL: z.string().default('https://dashscope.aliyuncs.com/compatible-mode/v1'),
   GEMINI_API_KEY: z.string().optional(),
   GEMINI_MODEL: z.string().default('gemini-2.5-flash'),
+  DEEPSEEK_API_KEY: z.string().optional(),
+  DEEPSEEK_MODEL: z.string().default('deepseek-chat'),
+  DEEPSEEK_BASE_URL: z.string().default('https://api.deepseek.com'),
 
   // Langfuse (optional — tracing & observability)
   LANGFUSE_SECRET_KEY: z.string().optional(),

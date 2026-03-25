@@ -4,6 +4,7 @@ import { OpenAIProvider } from './openai.js';
 import { AnthropicProvider } from './anthropic.js';
 import { QwenProvider } from './qwen.js';
 import { GeminiProvider } from './gemini.js';
+import { DeepSeekProvider } from './deepseek.js';
 
 let _provider: LLMProvider | null = null;
 
@@ -22,6 +23,9 @@ export function getLLMProvider(): LLMProvider {
       break;
     case 'gemini':
       _provider = new GeminiProvider();
+      break;
+    case 'deepseek':
+      _provider = new DeepSeekProvider();
       break;
     default:
       throw new Error(`Unknown LLM provider: ${env.LLM_PROVIDER}`);

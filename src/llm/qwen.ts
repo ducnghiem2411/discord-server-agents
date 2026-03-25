@@ -1,7 +1,7 @@
 import { ChatOpenAI } from '@langchain/openai';
 import { env } from '../config/env.js';
 import { getLangfuseHandler } from './langfuse.js';
-import { LLMProvider } from './provider.js';
+import { LLMProvider, llmMessagesToLangChain } from './provider.js';
 import { logger } from '../utils/logger.js';
 
 // Qwen exposes an OpenAI-compatible API endpoint
@@ -33,6 +33,17 @@ export class QwenProvider implements LLMProvider {
     const callbacks = options?.callbacks ?? getLangfuseHandler();
     const runConfig = callbacks ? { callbacks: Array.isArray(callbacks) ? callbacks : [callbacks] } : {};
     const response = await this.model.invoke(messages, runConfig);
+    return typeof response.content === 'string' ? response.content : '';
+  }
+
+  async generateWithMessages(
+    messages: import('./provider.js').LLMMessage[],
+    options?: import('./provider.js').LLMGenerateOptions,
+  ): Promise<string> {
+    logger.debug(`[Qwen] generateWithMessages (${messages.length} msgs) model ${env.QWEN_MODEL}`);
+    const callbacks = options?.callbacks ?? getLangfuseHandler();
+    const runConfig = callbacks ? { callbacks: Array.isArray(callbacks) ? callbacks : [callbacks] } : {};
+    const response = await this.model.invoke(llmMessagesToLangChain(messages), runConfig);
     return typeof response.content === 'string' ? response.content : '';
   }
 }
