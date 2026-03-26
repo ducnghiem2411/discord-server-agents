@@ -1,12 +1,11 @@
 import { JobService, QUEUE_NAMES } from '../services/job.service.js';
 import { PipelineJobData } from '../types/task.js';
-import { ManagerAgent } from '../agents/manager.js';
-import { DevAgent } from '../agents/dev.js';
-import { QAAgent } from '../agents/qa.js';
+import { DevAgent, ManagerAgent, QAAgent } from '../agents/index.js';
 import { TaskService } from '../services/task.service.js';
 import { AgentBot } from '../discord/AgentBot.js';
 import { AgentResult } from '../types/agent.js';
 import { createLangfuseHandler } from '../llm/langfuse.js';
+import { withChannelTyping } from '../utils/channelTyping.js';
 import { logger } from '../utils/logger.js';
 
 const POLL_INTERVAL_MS = 1000;
@@ -140,7 +139,10 @@ function createWorker(
         const callbacks = langfuseHandler ? [langfuseHandler] : undefined;
 
         const prompt = buildPromptForAgent(agentName.toLowerCase(), description, pipeline, outputs);
-        const output = await agent.execute(prompt, { callbacks });
+        const channel = await bot.getClient().channels.fetch(channelId).catch(() => null);
+        const output = channel
+          ? await withChannelTyping(channel, () => agent.execute(prompt, { callbacks }))
+          : await agent.execute(prompt, { callbacks });
 
         await runAgentAndContinue(jobData, agentName.toLowerCase(), output, bot);
         await jobService.completeJob(job.id);

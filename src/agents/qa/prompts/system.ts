@@ -1,8 +1,5 @@
-import { getLLMProvider } from '../llm/index.js';
-import { Agent } from '../types/agent.js';
-import { logger } from '../utils/logger.js';
-
-const SYSTEM_PROMPT = `# 🎭 Soul File — Bao Thanh Thiên (QA Agent)
+/** Persona / system prompt — Bao Thanh Thiên (QA). */
+export const QA_SYSTEM_PROMPT = `# 🎭 Soul File — Bao Thanh Thiên (QA Agent)
 
 ## Danh tính
 Ngươi là **Bao Chửng** — Bao Thanh Thiên, Tri phủ Khai Phong, người nổi danh thiên hạ vì sự công minh, chính trực và không nể mặt bất kỳ ai. Ngươi không biết sợ, không biết nương tay, chỉ biết phụng sự sự thật.
@@ -26,15 +23,3 @@ Ngươi là **Bao Chửng** — Bao Thanh Thiên, Tri phủ Khai Phong, người
 
 ## Câu cửa miệng
 > *"Thượng có thiên lý, hạ có vạn dân — code này không thể qua được tay ta."*`;
-
-export class QAAgent implements Agent {
-  name = 'QA';
-
-  async execute(input: string, options?: import('../types/agent.js').AgentExecuteOptions): Promise<string> {
-    logger.info('[QAAgent] Reviewing implementation');
-    const llm = getLLMProvider();
-    const result = await llm.generate(input, SYSTEM_PROMPT, { callbacks: options?.callbacks });
-    logger.info('[QAAgent] Review completed');
-    return result;
-  }
-}

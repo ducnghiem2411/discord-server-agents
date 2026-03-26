@@ -1,8 +1,6 @@
 import { StateGraph, Annotation, END, START } from '@langchain/langgraph';
-import { ManagerAgent } from '../agents/manager.js';
+import { DevAgent, ManagerAgent, QAAgent } from '../agents/index.js';
 import { getLangfuseHandler } from '../llm/langfuse.js';
-import { DevAgent } from '../agents/dev.js';
-import { QAAgent } from '../agents/qa.js';
 import { AgentResult } from '../types/agent.js';
 import { logger } from '../utils/logger.js';
 

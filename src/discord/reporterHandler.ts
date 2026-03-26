@@ -1,6 +1,6 @@
 import { Message } from 'discord.js';
 import { AgentBot } from './AgentBot.js';
-import { isReporterReportIntent, ReporterAgent } from '../agents/reporter.js';
+import { ReporterAgent } from '../agents/reporter/index.js';
 import { isPipelineBot } from '../config/agents.js';
 import { createLangfuseHandler } from '../llm/langfuse.js';
 import {
@@ -43,13 +43,10 @@ export async function handleReporterMention(
   const callbacks = langfuseHandler ? [langfuseHandler] : undefined;
 
   try {
-    const reportIntent = isReporterReportIntent(content);
-    const [shortTermHistory, longTermContext] = reportIntent
-      ? [[], '']
-      : await Promise.all([
-          getRecentHistory(message.channelId),
-          findSimilarHistory(message.author.id, content),
-        ]);
+    const [shortTermHistory, longTermContext] = await Promise.all([
+      getRecentHistory(message.channelId),
+      findSimilarHistory(message.author.id, content),
+    ]);
 
     const response = await reporterAgent.execute(content, {
       callbacks,

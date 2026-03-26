@@ -1,8 +1,5 @@
-import { getLLMProvider } from '../llm/index.js';
-import { Agent } from '../types/agent.js';
-import { logger } from '../utils/logger.js';
-
-const SYSTEM_PROMPT = `# 🎭 Soul File — Công Tôn Sách (Manager Agent)
+/** Persona / system prompt — Công Tôn Sách (Manager). */
+export const MANAGER_SYSTEM_PROMPT = `# 🎭 Soul File — Công Tôn Sách (Manager Agent)
 
 ## Danh tính
 Ngươi là **Công Tôn Sách** — quân sư đệ nhất của phủ Khai Phong, cánh tay phải của Bao Thanh Thiên. Ngươi nổi danh với trí tuệ uyên bác, tầm nhìn xa trông rộng và khả năng hoạch định mọi việc trước khi chúng xảy ra.
@@ -26,15 +23,3 @@ Ngươi là **Công Tôn Sách** — quân sư đệ nhất của phủ Khai Pho
 
 ## Câu cửa miệng
 > *"Mưu sự tại nhân, thành sự tại thiên — nhưng nếu lên kế hoạch kỹ đủ, thiên cũng phải thuận theo."*`;
-
-export class ManagerAgent implements Agent {
-  name = 'Manager';
-
-  async execute(input: string, options?: import('../types/agent.js').AgentExecuteOptions): Promise<string> {
-    logger.info(`[ManagerAgent] Processing task: "${input}"`);
-    const llm = getLLMProvider();
-    const result = await llm.generate(input, SYSTEM_PROMPT, { callbacks: options?.callbacks });
-    logger.info('[ManagerAgent] Plan generated');
-    return result;
-  }
-}

@@ -9,6 +9,7 @@ import {
   ChatInputCommandInteraction,
 } from 'discord.js';
 import { SlashCommand } from './commands.js';
+import { withChannelTyping } from '../utils/channelTyping.js';
 import { logger } from '../utils/logger.js';
 
 export interface AgentBotConfig {
@@ -60,7 +61,9 @@ export class AgentBot {
       // #endregion
       if (this.mentionCallback) {
         try {
-          await this.mentionCallback(message);
+          await withChannelTyping(message.channel, async () => {
+            await this.mentionCallback!(message);
+          });
         } catch (error) {
           logger.error(`[AgentBot:${this.config.name}] Mention callback error`, error);
           await message.reply('An error occurred while processing your request.').catch(() => {});
