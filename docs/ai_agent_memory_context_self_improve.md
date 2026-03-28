@@ -102,7 +102,7 @@ Hệ thống agent thực tế cần **quản lý bộ nhớ có chủ đích** 
 
 ---
 
-## 4 — Cách triển khai
+## 4 — Luồng hoạt động
 
 ![Agent Memory Flow](agent_memory_flow_v2.svg)
 
