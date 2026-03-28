@@ -29,14 +29,16 @@ Agent tự động sửa code, chạy lại, fail mãi một lỗi — nhưng kh
 
 Context window là giới hạn tối đa số token mà model có thể nhìn thấy (input) và xử lý (output) cùng một lúc.
 
-Trong thực tế, hầu hết các model hiện nay đều có giới hạn max output token để đảm bảo request luôn kết thúc cũng như đảm bảo chất lượng cho output, tránh bị loãng.
-
 **Ví dụ thực tế** — Claude Sonnet 4.6 — Context 200K, Max Output 64K
 
 ```
 Trường hợp 1: Input:  180,000 tok  →  Output tối đa: 20,000 tok (bị giới hạn bởi context)
 Trường hợp 2: Input:  10,000 tok   →  Output tối đa: 64,000 tok (bị giới hạn bởi max output)
 ```
+
+Trong thực tế, hầu hết các model hiện nay đều có giới hạn max output token để đảm bảo request luôn kết thúc cũng như đảm bảo chất lượng cho output, tránh bị loãng.
+
+→ Cần tối ưu cả input cũng như output để có thể đạt được kết quả mong muốn với chi phí tốt nhất
 
 ### Memory
 
