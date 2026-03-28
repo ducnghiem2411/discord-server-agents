@@ -3,8 +3,12 @@
  * Run once to set up the schema:
  *   npm run db:migrate
  */
+import type { Pool } from 'pg';
+import { EMBEDDING_VECTOR_DIMENSION } from '../config/embeddingDimension.js';
 import { getPool, closePool } from './postgres.js';
 import { logger } from '../utils/logger.js';
+
+const EMBED_DIM = EMBEDDING_VECTOR_DIMENSION;
 
 const PGVECTOR_INSTALL_GUIDE = `
 pgvector extension is not installed on the PostgreSQL server.
@@ -36,7 +40,7 @@ export async function ensurePgvector(): Promise<void> {
   }
 }
 
-const MIGRATION_SQL = `
+const MIGRATION_SQL = /* sql */ `
 -- Enable pgvector extension
 CREATE EXTENSION IF NOT EXISTS vector;
 
@@ -109,7 +113,7 @@ CREATE TABLE IF NOT EXISTS embeddings (
   id          SERIAL PRIMARY KEY,
   content     TEXT NOT NULL,
   metadata    JSONB DEFAULT '{}',
-  vector      vector(1536),
+  vector      vector(${EMBED_DIM}),
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -117,6 +121,19 @@ CREATE TABLE IF NOT EXISTS embeddings (
 CREATE INDEX IF NOT EXISTS embeddings_vector_idx
   ON embeddings USING ivfflat (vector vector_cosine_ops)
   WITH (lists = 100);
+
+-- Reporter short-term memory (per-channel chat turns)
+CREATE TABLE IF NOT EXISTS conversation_history (
+  id                 SERIAL PRIMARY KEY,
+  discord_user_id    TEXT NOT NULL,
+  discord_channel_id TEXT NOT NULL,
+  role               TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
+  content            TEXT NOT NULL,
+  created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_conv_history_channel
+  ON conversation_history (discord_channel_id, created_at DESC);
 
 -- Trigger to auto-update updated_at on tasks
 CREATE OR REPLACE FUNCTION update_updated_at()
@@ -133,10 +150,61 @@ CREATE TRIGGER tasks_updated_at
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 `;
 
+/**
+ * If `embeddings.vector` was created with a legacy dimension (e.g. 1536), truncate and ALTER to match `EMBEDDING_VECTOR_DIMENSION`.
+ */
+async function ensureEmbeddingsVectorDimension(pool: Pool, dim: number): Promise<void> {
+  const expected = `vector(${dim})`;
+  const tableCheck = await pool.query<{ exists: boolean }>(
+    `SELECT EXISTS (
+      SELECT 1 FROM pg_class c
+      JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE c.relname = 'embeddings' AND n.nspname = 'public' AND c.relkind = 'r'
+    ) AS exists`,
+  );
+  if (!tableCheck.rows[0]?.exists) {
+    logger.info('[Migrate] No embeddings table; skip vector dimension alignment');
+    return;
+  }
+
+  const typeRow = await pool.query<{ typ: string | null }>(
+    `SELECT format_type(a.atttypid, a.atttypmod) AS typ
+     FROM pg_attribute a
+     JOIN pg_class c ON a.attrelid = c.oid
+     JOIN pg_namespace n ON c.relnamespace = n.oid
+     WHERE c.relname = 'embeddings'
+       AND n.nspname = 'public'
+       AND a.attname = 'vector'
+       AND NOT a.attisdropped
+       AND a.attnum > 0`,
+  );
+  const typ = typeRow.rows[0]?.typ ?? '';
+  if (typ === expected) {
+    logger.info('[Migrate] embeddings.vector already %s', expected);
+    return;
+  }
+
+  logger.info(
+    '[Migrate] embeddings.vector is %s; aligning to %s (TRUNCATE embeddings — semantic rows cleared)',
+    typ || 'unknown',
+    expected,
+  );
+  await pool.query('DROP INDEX IF EXISTS embeddings_vector_idx');
+  await pool.query('TRUNCATE TABLE embeddings');
+  await pool.query(`ALTER TABLE embeddings ALTER COLUMN vector TYPE vector(${dim})`);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS embeddings_vector_idx
+      ON embeddings USING ivfflat (vector vector_cosine_ops)
+      WITH (lists = 100)
+  `);
+  logger.info('[Migrate] embeddings.vector aligned to %s', expected);
+}
+
 export async function runMigration(): Promise<void> {
   logger.info('[Migrate] Running database migration...');
   const pool = getPool();
   await pool.query(MIGRATION_SQL);
+  await ensureEmbeddingsVectorDimension(pool, EMBEDDING_VECTOR_DIMENSION);
   logger.info('[Migrate] Migration completed successfully');
 }
 

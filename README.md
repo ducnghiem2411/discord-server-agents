@@ -26,14 +26,14 @@ Discord (results posted as embeds)
 
 ## Tech Stack
 
-| Layer          | Technology                        |
-|----------------|-----------------------------------|
-| Bot            | discord.js v14                    |
-| Agent Framework| LangGraphJS                       |
-| Queue          | PostgreSQL (jobs table, polling)  |
-| Database       | PostgreSQL + pgvector             |
-| LLM            | OpenAI / Anthropic / Qwen        |
-| Runtime        | Node.js + TypeScript              |
+| Layer           | Technology                       |
+| --------------- | -------------------------------- |
+| Bot             | discord.js v14                   |
+| Agent Framework | LangGraphJS                      |
+| Queue           | PostgreSQL (jobs table, polling) |
+| Database        | PostgreSQL + pgvector            |
+| LLM             | OpenAI / Anthropic / Qwen        |
+| Runtime         | Node.js + TypeScript             |
 
 ## Prerequisites
 
@@ -59,19 +59,19 @@ cp .env.example .env
 
 Edit `.env` and fill in:
 
-| Variable            | Description                                      |
-|---------------------|--------------------------------------------------|
-| `DISCORD_TOKEN`     | Bot token from Discord Developer Portal          |
-| `DISCORD_CLIENT_ID` | Application ID from Discord Developer Portal     |
-| `DISCORD_GUILD_ID`  | Your server (guild) ID                           |
-| `POSTGRES_URL`      | PostgreSQL connection string                     |
-| `LLM_PROVIDER`      | `openai`, `anthropic`, `qwen`, or `gemini`       |
-| `OPENAI_API_KEY`    | OpenAI key (if using OpenAI)                     |
-| `ANTHROPIC_API_KEY` | Anthropic key (if using Anthropic)               |
-| `QWEN_API_KEY`      | Qwen/DashScope key (if using Qwen)               |
-| `GEMINI_API_KEY`    | Google AI key (if using Gemini)                  |
-| `LANGFUSE_SECRET_KEY` | Langfuse secret key (optional — tracing)      |
-| `LANGFUSE_PUBLIC_KEY` | Langfuse public key (optional — tracing)      |
+| Variable              | Description                                  |
+| --------------------- | -------------------------------------------- |
+| `DISCORD_TOKEN`       | Bot token from Discord Developer Portal      |
+| `DISCORD_CLIENT_ID`   | Application ID from Discord Developer Portal |
+| `DISCORD_GUILD_ID`    | Your server (guild) ID                       |
+| `POSTGRES_URL`        | PostgreSQL connection string                 |
+| `LLM_PROVIDER`        | `openai`, `anthropic`, `qwen`, or `gemini`   |
+| `OPENAI_API_KEY`      | OpenAI key (if using OpenAI)                 |
+| `ANTHROPIC_API_KEY`   | Anthropic key (if using Anthropic)           |
+| `QWEN_API_KEY`        | Qwen/DashScope key (if using Qwen)           |
+| `GEMINI_API_KEY`      | Google AI key (if using Gemini)              |
+| `LANGFUSE_SECRET_KEY` | Langfuse secret key (optional — tracing)     |
+| `LANGFUSE_PUBLIC_KEY` | Langfuse public key (optional — tracing)     |
 
 ### 3. Prepare the database
 
@@ -233,8 +233,10 @@ tasks       — id (BIGSERIAL), description, status, result, error, discord_*, c
 jobs        — id (BIGSERIAL), task_id, queue_name, data (JSONB), status, attempts, error, created_at
 agents      — id, name, description
 messages    — id, task_id, agent, content, created_at
-embeddings  — id, content, metadata, vector (1536-dim), created_at
+embeddings  — id, content, metadata, vector (768-dim, Ollama nomic-embed-text / `EMBEDDING_VECTOR_DIMENSION`), created_at
 ```
+
+Reporter **long-term** conversation memory uses local Ollama embeddings (`OLLAMA_BASE_URL`, `OLLAMA_EMBEDDING_MODEL`). Run `npm run db:migrate` after deploy: the migration creates `embeddings` with the correct dimension and, if an older DB still has e.g. `vector(1536)`, automatically truncates `embeddings` and alters the column to 768.
 
 ## Future Improvements
 
@@ -244,4 +246,5 @@ embeddings  — id, content, metadata, vector (1536-dim), created_at
 - Agent-to-agent communication: agents can query each other during execution
 - Monitoring dashboard: task history, agent performance metrics
 - Multi-guild support: per-guild configuration and isolation
+
 # discord-server-agents
