@@ -102,49 +102,7 @@ Hệ thống agent thực tế cần **quản lý bộ nhớ có chủ đích** 
 
 ## 4 — Cách triển khai
 
-### Kiến trúc Memory trong Agent
-
-**Tầng 1 — Short-term**
-
-- Conversation buffer, sliding window, summarization
-- Tồn tại trong một session, bị xóa khi kết thúc
-
-**Tầng 2 — Long-term**
-
-- Vector DB (pgvector): lưu embedding của các đoạn hội thoại, facts, preference
-- Key-value store: user profile, session state
-- Episodic log: lịch sử hành động của agent
-
-**Tầng 3 — Self-improve loop**
-
-- Reflection node → đánh giá kết quả hành động vừa thực hiện
-- Memory write → ghi insight vào external store
-- Retrieval → lần sau lấy lại và áp dụng
-
-### Flow tổng thể (LangGraph)
-
-```
-User input
-    │
-    ▼
-[Retrieve memory]  ←── pgvector similarity search
-    │
-    ▼
-[Compose context]  ←── memory + system prompt + current input
-    │
-    ▼
-[LLM call]         ←── DeepSeek / Gemini
-    │
-    ▼
-[Action / Response]
-    │
-    ▼
-[Reflect & Write]  ←── nếu có feedback hoặc kết quả đánh giá được
-    │
-    └──────────────────► pgvector (update memory)
-```
-
-> LangGraph: mỗi node là một bước — có thể loop, branch, hoặc trigger memory write có điều kiện.
+![Agent Memory Flow](agent_memory_flow_v2.svg)
 
 ---
 
