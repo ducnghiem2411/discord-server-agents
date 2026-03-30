@@ -43,10 +43,12 @@ export async function handleReporterMention(
   const callbacks = langfuseHandler ? [langfuseHandler] : undefined;
 
   try {
-    const [shortTermHistory, longTermContext] = await Promise.all([
+    const isUseMemory = false;
+
+    const [shortTermHistory, longTermContext] = isUseMemory ? await Promise.all([
       getRecentHistory(message.channelId),
       findSimilarHistory(message.author.id, content),
-    ]);
+    ]) : [[], ''];
 
     const response = await reporterAgent.execute(content, {
       callbacks,
@@ -74,6 +76,6 @@ export async function handleReporterMention(
     }
   } catch (error) {
     logger.error('[ReporterHandler] Error', error);
-    await message.reply('Đã xảy ra lỗi khi xử lý yêu cầu.').catch(() => {});
+    await message.reply('Đã xảy ra lỗi khi xử lý yêu cầu.').catch(() => { });
   }
 }
