@@ -35,40 +35,6 @@ export async function storeEmbedding(
 }
 
 /**
- * Find semantically similar embeddings using cosine similarity.
- */
-export async function findSimilar(
-  queryVector: number[],
-  topK = 5,
-  threshold = 0.75,
-): Promise<SimilarResult[]> {
-  const vectorStr = `[${queryVector.join(',')}]`;
-  const rows = await query<{
-    id: number;
-    content: string;
-    metadata: Record<string, unknown>;
-    created_at: Date;
-    similarity: number;
-  }>(
-    `SELECT id, content, metadata, created_at,
-            1 - (vector <=> $1::vector) AS similarity
-     FROM embeddings
-     WHERE 1 - (vector <=> $1::vector) >= $2
-     ORDER BY similarity DESC
-     LIMIT $3`,
-    [vectorStr, threshold, topK],
-  );
-
-  return rows.map((r) => ({
-    id: r.id,
-    content: r.content,
-    metadata: r.metadata,
-    createdAt: r.created_at,
-    similarity: r.similarity,
-  }));
-}
-
-/**
  * Semantic search restricted to Reporter conversation embeddings for a given Discord user.
  */
 export async function findSimilarConversationForUser(
